@@ -172,18 +172,18 @@ Keep the plugin as the final entry in your plugins list so it can build on upstr
 ## Distribution & Installation
 
 ### Publisher Playbook (JSR)
-Deno positions JSR as the canonical registry for modern TypeScript packages, including lint plugins, so treat it as the default publication target for this project.citeturn1search7
+Deno positions JSR as the canonical registry for modern TypeScript packages, including lint plugins, so treat it as the default publication target for this project.
 
-1. **Create or sign in to a JSR account** using GitHub—this is the only supported authentication path today.citeturn0reddit13
-2. **Reserve a scope and package name** that matches your plugin (`@light-fp/deno-lint-plugin`). You can configure the scope and visibility from the JSR dashboard before your first publish.citeturn1search0
-3. **Ensure `deno.json` (or `jsr.json`) declares the correct metadata**: include `"name"`, `"version"`, and an `"exports"` map so JSR knows how to serve the package, and keep the source ESM-only with full file extensions because JSR rewrites bare specifiers to fully qualified URLs.citeturn1search5turn1search0
-4. **Verify plugin wiring locally** by pointing `deno.json` at `./src/mod.ts` and running `deno lint` so you catch rule regressions before shipping to users.citeturn0search1
-5. **Run quality gates**: `deno doc --lint` and `deno lint` surface documentation and style issues the registry will reject, and `deno publish --dry-run` confirms what files will ship.citeturn1search4turn1search0
-6. **Publish the release** with `deno publish` (or `npx jsr publish`) once the dry run succeeds. You can automate this step via CI, but manual publishes are supported as long as you are logged in.citeturn1search0
-7. **Follow semantic versioning**: JSR packages are immutable, so bump the version every time (e.g., patch for bug fixes, minor for new rules, major for breaking defaults) before publishing.citeturn1search2
+1. **Create or sign in to a JSR account** using GitHub—this is the only supported authentication path today.
+2. **Reserve a scope and package name** that matches your plugin (`@light-fp/deno-lint-plugin`). You can configure the scope and visibility from the JSR dashboard before your first publish.
+3. **Ensure `deno.json` (or `jsr.json`) declares the correct metadata**: include `"name"`, `"version"`, and an `"exports"` map so JSR knows how to serve the package, and keep the source ESM-only with full file extensions because JSR rewrites bare specifiers to fully qualified URLs.
+4. **Verify plugin wiring locally** by pointing `deno.json` at `./src/mod.ts` and running `deno lint` so you catch rule regressions before shipping to users.
+5. **Run quality gates**: `deno doc --lint` and `deno lint` surface documentation and style issues the registry will reject, and `deno publish --dry-run` confirms what files will ship.
+6. **Publish the release** with `deno publish` (or `npx jsr publish`) once the dry run succeeds. You can automate this step via CI, but manual publishes are supported as long as you are logged in.
+7. **Follow semantic versioning**: JSR packages are immutable, so bump the version every time (e.g., patch for bug fixes, minor for new rules, major for breaking defaults) before publishing.
 
 ### Consumer Setup
-1. **Add the dependency**. `deno add @light-fp/deno-lint-plugin` records the package in `deno.json` (or `deno.jsonc`) and updates `deno.lock`.citeturn1search8
+1. **Add the dependency**. `deno add @light-fp/deno-lint-plugin` records the package in `deno.json` (or `deno.jsonc`) and updates `deno.lock`.
 2. **Reference the plugin with an explicit semver range** so CI detaches from unpublished development versions:
    ```jsonc
    {
@@ -197,26 +197,26 @@ Deno positions JSR as the canonical registry for modern TypeScript packages, inc
      }
    }
    ```
-   The `@^0.3.0` prefix keeps you on compatible minor releases while locking out breaking majors.citeturn1search2
-3. **Run `deno lint --fix`** to confirm the plugin loads and to apply safe auto-fixes in your project.citeturn0search1
-4. **Commit the updated `deno.lock`** so team members and CI resolve the same plugin version; JSR’s immutable packages guarantee reproducible installs.citeturn1search2
+   The `@^0.3.0` prefix keeps you on compatible minor releases while locking out breaking majors.
+3. **Run `deno lint --fix`** to confirm the plugin loads and to apply safe auto-fixes in your project.
+4. **Commit the updated `deno.lock`** so team members and CI resolve the same plugin version; JSR’s immutable packages guarantee reproducible installs.
 
 ### Why JSR
-- **First-class TypeScript support and automatic documentation** differentiate JSR from publishing to npm or `deno.land/x`.citeturn1search1turn1search7
-- **Native integration with Deno tooling** (`deno add`, `deno publish`, registry-backed linting) means less configuration than npm packages, which require extra shim metadata.citeturn1search8turn1search0
-- **Import rewriting and module verification** ensure consumers get ESM-friendly specifiers with full extensions, something `deno.land/x` cannot enforce.citeturn1search0
-- **Alternatives**: local paths (`"./src/mod.ts"`) remain useful for development, and npm packages (`"npm:..."`) can work but demand bundling CommonJS/ESM builds and produce slower installs—JSR avoids both trade-offs.citeturn0search1turn1search7
+- **First-class TypeScript support and automatic documentation** differentiate JSR from publishing to npm or `deno.land/x`.
+- **Native integration with Deno tooling** (`deno add`, `deno publish`, registry-backed linting) means less configuration than npm packages, which require extra shim metadata.
+- **Import rewriting and module verification** ensure consumers get ESM-friendly specifiers with full extensions, something `deno.land/x` cannot enforce.
+- **Alternatives**: local paths (`"./src/mod.ts"`) remain useful for development, and npm packages (`"npm:..."`) can work but demand bundling CommonJS/ESM builds and produce slower installs—JSR avoids both trade-offs.
 
 ### Caveats & Special Considerations
-- The lint plugin API shipped in Deno 2.2 and is still flagged experimental, so recommend Deno ≥ 2.2 for consumers and monitor release notes for breaking changes.citeturn0search1
-- JSR only serves ESM modules; keep `.ts` (or transpiled `.mjs`) sources with explicit extensions and avoid Node-style resolution.citeturn1search0
-- Publishing from CI requires a JSR token tied to your GitHub identity—there is no alternative auth flow today.citeturn0reddit13
-- Releases are immutable; to retract a faulty build you must publish a new, higher version and deprecate the old one.citeturn1search2
+- The lint plugin API shipped in Deno 2.2 and is still flagged experimental, so recommend Deno ≥ 2.2 for consumers and monitor release notes for breaking changes.
+- JSR only serves ESM modules; keep `.ts` (or transpiled `.mjs`) sources with explicit extensions and avoid Node-style resolution.
+- Publishing from CI requires a JSR token tied to your GitHub identity—there is no alternative auth flow today.
+- Releases are immutable; to retract a faulty build you must publish a new, higher version and deprecate the old one.
 
 ### Live Examples
-- `@studios/lint` — a community rule pack published through JSR’s lint plugin contest, showcasing best-practice packaging.citeturn0search2
-- `@lambtron/andys-lint-rule` — single-rule plugin demonstrating minimal configuration and documentation.citeturn0search6
-- Contest entries such as `@armaanas/no-empty-function` illustrate how teams submit specialty rules via JSR with the same workflow.citeturn0search0
+- `@studios/lint` — a community rule pack published through JSR’s lint plugin contest, showcasing best-practice packaging.
+- `@lambtron/andys-lint-rule` — single-rule plugin demonstrating minimal configuration and documentation.
+- Contest entries such as `@armaanas/no-empty-function` illustrate how teams submit specialty rules via JSR with the same workflow.
 
 ## Configuration
 All rules share a single options object. Set it in `deno.json` alongside the plugin entry.
