@@ -80,7 +80,7 @@ You can customize the plugin behavior by passing options:
 ### Default Configuration
 The plugin comes with sensible defaults (see `src/util/options.ts`):
 - **Effect identifiers**: `["IO", "Console", "FS", "Clock", "Env", "Throw", "State"]`
-- **Allowed brand functions**: `["brand", "brandWithCapability", "withCapability", "map", "chain", "zip", "mapArray", "raise", "handleThrow"]`
+- **Allowed brand functions**: `["brand", "brandWithCapability", "withCapability", "withIOCapability", "withConsoleCapability", "withClockCapability", "withEnvCapability", "map", "chain", "zip", "mapArray", "raise", "handleThrow"]`
 - **Adapter globs**: `["**/src/adapters/**/*.ts"]`
 - **Domain globs**: `["**/src/**/*.ts", "**/tests/**/*.ts"]`
 - **Ignore globs**: `["**/tests/**/*.ts"]`
@@ -337,8 +337,8 @@ The plugin recognizes these effect brands by default:
 The plugin allows these functions to create effect-branded values:
 
 #### Core Branding Functions
-- **`brand(value)`** - Attach an effect brand to a value
-- **`brandWithCapability(value, capability)`** - Brand with a capability token
+- **`brand(name, run)`** - Attach an effect brand to a value
+- **`brandWithCapability(name, capability, run)`** - Brand with a capability token and execution plan
 - **`withCapability(capability)`** - Create a branded value with a capability
 
 #### Specific Capability Helpers
@@ -360,11 +360,11 @@ The plugin allows these functions to create effect-branded values:
 ### Example Usage
 ```typescript
 // ✅ GOOD: Using approved helpers
-const readFile = (path: string): FS<string> => 
-  brand(Deno.readTextFileSync(path));
+const readFile = (path: string): IO<string> =>
+  brand("IO", () => Deno.readTextFile(path));
 
-const log = (msg: string): Console<void> => 
-  withConsoleCapability(() => console.log(msg));
+const log = (msg: string): Console<void> =>
+  withConsoleCapability(console, async (cap) => cap.log(msg));
 
 // ✅ GOOD: Composing effects
 const program = map(
@@ -519,4 +519,3 @@ deno task fmt
 # Publish to JSR
 deno publish
 ```
-

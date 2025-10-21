@@ -1,0 +1,94 @@
+// Intermediate API example (after): the domain returns an HTTP plan instead of performing IO.
+// Benefits:
+// - Pure request builders make it trivial to unit test headers and payloads.
+// - Result types ensure adapters must acknowledge error cases.
+// - The Http effect is branded so the call site knows it performs IO.
+// - Auto-fix friendly: running `deno lint --fix` on this file is a no-op because it already respects the rule hints.
+
+import { brandWithCapability, err, map, ok, type Result, type WithCapability } from "./shared/primitives.ts";
+
+type HttpMethod = "GET" | "POST";
+
+export type HttpRequest = Readonly<{
+  readonly method: HttpMethod;
+  readonly path: string;
+  readonly headers: Readonly<Record<string, string>>;
+  readonly body?: unknown;
+}>;
+
+export type HttpResponse = Readonly<{
+  readonly status: number;
+  readonly json: () => Promise<unknown>;
+}>;
+
+export type HttpCapability = Readonly<{ readonly request: (input: HttpRequest) => Promise<HttpResponse> }>;
+
+export type ApiError =
+  | { readonly type: "Unauthorized"; readonly message: string }
+  | { readonly type: "Network"; readonly message: string }
+  | { readonly type: "UnexpectedResponse"; readonly message: string };
+
+export type HttpEffect = WithCapability<"Http", HttpCapability, Result<ApiError, HttpResponse>>;
+
+const bearer = (token: string): string => `Bearer ${token}`;
+
+const buildProfileRequest = (token: string): Result<ApiError, HttpRequest> =>
+  token.trim().length === 0
+    ? err({ type: "Unauthorized", message: "Missing token" })
+    : ok({
+      method: "GET",
+      path: "/me",
+      headers: { authorization: bearer(token) },
+    });
+
+const buildAuditRequest = (
+  token: string,
+  event: Readonly<Record<string, unknown>>,
+  issuedAt: number,
+): Result<ApiError, HttpRequest> =>
+  token.trim().length === 0
+    ? err({ type: "Unauthorized", message: "Missing token" })
+    : ok({
+      method: "POST",
+      path: "/audit",
+      headers: {
+        authorization: bearer(token),
+        "content-type": "application/json",
+      },
+      body: { ...event, issuedAt },
+    });
+
+export const planProfileFetch = (cap: HttpCapability, token: string): Result<ApiError, HttpEffect> =>
+  map(
+    buildProfileRequest(token),
+    (request) =>
+      brandWithCapability("Http", cap, async (http) => {
+        const response = await http.request(request);
+        if (response.status === 401) {
+          return err({ type: "Unauthorized", message: "Token revoked" });
+        }
+        return ok(response);
+      }),
+  );
+
+export const planAuditPost = (
+  cap: HttpCapability,
+  token: string,
+  event: Readonly<Record<string, unknown>>,
+  issuedAt: number,
+): Result<ApiError, HttpEffect> =>
+  map(
+    buildAuditRequest(token, event, issuedAt),
+    (request) =>
+      brandWithCapability("Http", cap, async (http) => {
+        try {
+          const response = await http.request(request);
+          if (response.status >= 400) {
+            return err({ type: "UnexpectedResponse", message: `Adapter returned ${response.status}` });
+          }
+          return ok(response);
+        } catch (cause) {
+          return err({ type: "Network", message: cause instanceof Error ? cause.message : String(cause) });
+        }
+      }),
+  );

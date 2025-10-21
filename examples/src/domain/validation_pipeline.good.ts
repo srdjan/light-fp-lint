@@ -1,0 +1,92 @@
+// Beginner validation example (after): pure transformations with explicit Result.
+// Highlights:
+// - `Result` ensures callers handle validation errors explicitly.
+// - Readonly types prevent accidental mutation.
+// - No `new` or top-level effects; clock access is deferred via an IO plan.
+// - When run with `--fix`, the linter keeps this file unchanged because it already matches the recommended style.
+
+import { brandWithCapability, err, ok, type Result, type WithCapability } from "./shared/primitives.ts";
+
+type RawSignup = Readonly<{
+  readonly name?: string;
+  readonly email?: string;
+  readonly roles?: readonly string[];
+  readonly birthDateISO?: string;
+}>;
+
+type ValidationError = Readonly<{ readonly field: "email" | "password" | "name" | "birthDate"; readonly message: string }>;
+
+type NormalizedSignup = Readonly<{
+  readonly name: string;
+  readonly email: string;
+  readonly roles: readonly string[];
+  readonly birthDateISO: string;
+}>;
+
+export type PersistenceDraft = Readonly<{
+  readonly name: string;
+  readonly email: string;
+  readonly roles: readonly string[];
+  readonly birthDateISO: string;
+  readonly createdAt: number;
+}>;
+
+type ClockCapability = Readonly<{ readonly clock: () => number }>;
+
+const ensureEmail = (value?: string): Result<readonly ValidationError[], string> => {
+  if (!value) return err([{ field: "email", message: "Required" }]);
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed.includes("@")) return err([{ field: "email", message: "Must contain @" }]);
+  return ok(trimmed);
+};
+
+const ensureName = (value?: string): Result<readonly ValidationError[], string> => {
+  if (!value) return err([{ field: "name", message: "Required" }]);
+  if (value.length > 80) return err([{ field: "name", message: "Too long" }]);
+  return ok(value.trim());
+};
+
+const ensureBirthDate = (value?: string): Result<readonly ValidationError[], string> => {
+  if (!value) return err([{ field: "birthDate", message: "Required ISO string" }]);
+  return /\d{4}-\d{2}-\d{2}/.test(value)
+    ? ok(value)
+    : err([{ field: "birthDate", message: "Use YYYY-MM-DD" }]);
+};
+
+const ensureRoles = (value?: readonly string[]): Result<readonly ValidationError[], readonly string[]> => {
+  if (!value || value.length === 0) return ok(["user"]);
+  const normalized = Array.from(new Set(value.map((role) => role.trim()).filter(Boolean)));
+  return ok(normalized);
+};
+
+export const normalizeSignup = (input: RawSignup): Result<readonly ValidationError[], NormalizedSignup> => {
+  const emailResult = ensureEmail(input.email);
+  const nameResult = ensureName(input.name);
+  const birthDateResult = ensureBirthDate(input.birthDateISO);
+  const rolesResult = ensureRoles(input.roles);
+
+  if (emailResult._tag === "Err" || nameResult._tag === "Err" || birthDateResult._tag === "Err" || rolesResult._tag === "Err") {
+    const errors = [
+      ...(emailResult._tag === "Err" ? emailResult.error : []),
+      ...(nameResult._tag === "Err" ? nameResult.error : []),
+      ...(birthDateResult._tag === "Err" ? birthDateResult.error : []),
+      ...(rolesResult._tag === "Err" ? rolesResult.error : []),
+    ];
+    return err(errors);
+  }
+
+  return ok({
+    name: nameResult.value,
+    email: emailResult.value,
+    roles: rolesResult.value,
+    birthDateISO: birthDateResult.value,
+  });
+};
+
+export type PersistenceEffect = WithCapability<"IO", ClockCapability, PersistenceDraft>;
+
+export const toPersistenceDraft = (cap: ClockCapability, normalized: NormalizedSignup): PersistenceEffect =>
+  brandWithCapability("IO", cap, async (clockCap) => ({
+    ...normalized,
+    createdAt: clockCap.clock(),
+  }));
