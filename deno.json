@@ -1,0 +1,29 @@
+{
+  "name": "@light-fp/deno-lint-plugin",
+  "version": "0.3.0",
+  "lint": {
+    "rules": {
+      "include": [
+        "recommended"
+      ]
+    },
+    "plugins": [
+      "./src/mod.ts"
+    ]
+  },
+  "compilerOptions": {
+    "strict": true
+  },
+  "imports": {
+    "@std/path": "https://deno.land/std@0.224.0/path/mod.ts",
+    "@std/glob": "https://deno.land/std@0.224.0/path/glob.ts",
+    "@types": "npm:@typescript-eslint/types@6.22.0"
+  },
+  "tasks": {
+    "fmt": "deno fmt",
+    "lint": "deno lint",
+    "test": "deno test -A --no-check",
+    "test:e2e": "deno run -A scripts/verify.ts",
+    "examples:lint": "deno lint --config deno.json examples"
+  }
+}

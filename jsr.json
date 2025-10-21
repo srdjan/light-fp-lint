@@ -1,0 +1,16 @@
+{
+  "name": "@light-fp/deno-lint-plugin",
+  "version": "0.3.0",
+  "exports": {
+    ".": "./src/mod.ts"
+  },
+  "publish": {
+    "include": [
+      "src",
+      "README.md",
+      "LICENSE",
+      "deno.json",
+      "jsr.json"
+    ]
+  }
+}
