@@ -49,6 +49,7 @@ export {
   compare,
   type CountDiagnostics,
   explain,
+  type FileDelta,
   measure,
   type Verdict,
 } from "./ratchet.ts";
