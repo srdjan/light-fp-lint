@@ -1,7 +1,7 @@
-import { assertEquals } from "@std/assert";
+import { assert, assertEquals } from "@std/assert";
 import { fromFileUrl, join, relative } from "@std/path";
 import { type Baseline, compare, explain, measure } from "../src/ratchet.ts";
-import plugin from "../src/mod.ts";
+import plugin, { type FileDelta } from "../src/mod.ts";
 
 // The capability the ratchet asks for: this is the adapter half.
 const count = (path: string, source: string): number =>
@@ -29,8 +29,17 @@ const read = async (
 
 Deno.test("ratchet: this repository holds at zero", async () => {
   const current = measure(count, await read("src"));
-  const offenders = Object.entries(current).filter(([, count]) => count > 0);
-  assertEquals(offenders, [], "the plugin no longer passes its own gate");
+  const entries = Object.entries(current);
+  assert(entries.length > 0, "the walk found no files; nothing was measured");
+
+  // runPlugin ignores deno-lint-ignore, so suppressed violations deliberately
+  // count toward the baseline as debt.
+  const offenders = entries.filter(([, count]) => count > 0);
+  assertEquals(
+    offenders,
+    [],
+    "src/ carries unsuppressed or suppressed violations counted by the ratchet",
+  );
 });
 
 // The comparison itself is pure, so it is tested as data rather than by
@@ -56,6 +65,31 @@ Deno.test("ratchet: progress fails too, asking for a tighter baseline", () => {
   const verdict = compare({ "a.ts": 3 }, { "a.ts": 1 });
   assertEquals(verdict._tag, "Improved");
   assertEquals(explain(verdict).includes("tighten the baseline"), true);
+});
+
+Deno.test("ratchet: an empty measurement proves nothing", () => {
+  const baselines: readonly Baseline[] = [
+    { "a.ts": 3 },
+    { "a.ts": 0, "b.ts": 0 },
+    {},
+  ];
+
+  for (const baseline of baselines) {
+    const verdict = compare(baseline, {});
+    assertEquals(verdict._tag, "NothingMeasured");
+    assertEquals(
+      explain(verdict),
+      "no files were measured; the ratchet proved nothing",
+    );
+  }
+});
+
+Deno.test("ratchet: a missing file remains an improvement", () => {
+  const missing: FileDelta = { file: "a.ts", was: 3, now: 0 };
+  assertEquals(
+    compare({ "a.ts": 3 }, { "measured.ts": 0 }),
+    { _tag: "Improved", files: [missing] },
+  );
 });
 
 Deno.test("ratchet: a rise anywhere outweighs a fall elsewhere", () => {

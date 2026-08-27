@@ -24,6 +24,7 @@ export type FileDelta = Readonly<{
 
 export type Verdict =
   | { readonly _tag: "Unchanged" }
+  | { readonly _tag: "NothingMeasured" }
   | { readonly _tag: "Regressed"; readonly files: readonly FileDelta[] }
   | { readonly _tag: "Improved"; readonly files: readonly FileDelta[] };
 
@@ -53,6 +54,7 @@ const deltas = (baseline: Baseline, current: Baseline): readonly FileDelta[] =>
  * without anyone noticing.
  */
 export const compare = (baseline: Baseline, current: Baseline): Verdict => {
+  if (Object.keys(current).length === 0) return { _tag: "NothingMeasured" };
   const changed = deltas(baseline, current);
   if (changed.length === 0) return { _tag: "Unchanged" };
   const worse = changed.filter((d) => d.now > d.was);
@@ -69,6 +71,8 @@ export const explain = (verdict: Verdict): string => {
   switch (verdict._tag) {
     case "Unchanged":
       return "";
+    case "NothingMeasured":
+      return "no files were measured; the ratchet proved nothing";
     case "Regressed":
       return `new violations:\n${listing(verdict.files)}`;
     case "Improved":
