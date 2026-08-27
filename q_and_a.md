@@ -1,521 +1,190 @@
-# Light FP Deno Lint Plugin - Questions & Answers
+# Design rationale
 
-## 1. What is the purpose and scope of this Deno lint plugin for Light Functional Programming?
+Why this plugin is shaped the way it is. The [README](README.md) covers what the
+rules do; this file covers the decisions behind them, including the ones that
+were made under constraint rather than by preference.
 
-### Purpose
-The `@light-fp/deno-lint-plugin` is a Deno lint plugin designed to enforce **Light Functional Programming (Light FP)** discipline in TypeScript projects. It provides fast, syntactic analysis with pragmatic auto-fixes to help developers write cleaner, more maintainable functional code.
+## Why can I not configure anything?
 
-### Core Philosophy
-The plugin enforces three fundamental pillars of Light FP:
-1. **Model with types first; make illegal states unrepresentable** - Use algebraic data types (ADTs) and smart constructors
-2. **Keep the core pure (no I/O); push effects to edges** - Separate pure business logic from side effects
-3. **Treat errors as values** - Use `Result<T, E>` instead of throwing exceptions
+Because Deno lint plugins cannot receive configuration, and pretending otherwise
+was the single largest defect in the previous version.
 
-### Scope
-The plugin provides **10 lint rules** that cover:
-- **Effect management**: Ensuring side effects are properly tracked and branded
-- **Data modeling**: Enforcing immutable data structures with `readonly` properties
-- **Architectural boundaries**: Preventing domain code from importing adapters
-- **Type discipline**: Using `type` for data and `interface` for capabilities/ports
-- **Error handling**: Replacing exceptions with `Result` types
-- **OOP restrictions**: Banning classes, `new`, and `this` in domain code
+`lint.plugins` accepts an array of strings. A tuple entry is not ignored, it is
+a hard parse error:
 
----
-
-## 2. How do I install and configure this plugin in my Deno project?
-
-### Installation
-
-#### Option 1: Local Repository
-If you're developing the plugin or using it locally:
-
-```jsonc
-// deno.json
-{
-  "lint": { 
-    "plugins": ["./src/mod.ts"] 
-  }
-}
+```console
+error: Failed to parse "lint" configuration
+Caused by: invalid type: sequence, expected a string
 ```
 
-#### Option 2: JSR (Recommended for Production)
-After the plugin is published to JSR:
+`Deno.lint.RuleContext` exposes exactly `id`, `filename`, `sourceCode`,
+`report`, `getFilename()`, and `getSourceCode()`. There is no `options` field to
+read even if there were a way to set one.
 
-```jsonc
-// deno.json
-{
-  "lint": { 
-    "plugins": ["jsr:@light-fp/deno-lint-plugin"] 
-  }
-}
+So a rule knows two things: the text of one file, and that file's name. Every
+decision has to come from those. Once that is accepted, the design follows: the
+layer is a property of the file, declared in the file.
+
+The consolation is real. Per-file configuration is versioned, shows up in every
+diff, and answers questions a glob cannot. `grep -rn "@light-fp adapter" src/`
+enumerates every file that left the strict layer. There is no equivalent query
+for "which files did that `**/src/**/*.ts` pattern actually match, and did
+anyone notice when it stopped matching".
+
+## Why does an unrecognised file default to the strict layer?
+
+Because a gate that fails open does not fail, it disappears.
+
+Suppose the default were "unknown means relaxed". Someone renames `src/domain/`
+to `src/core/` during a refactor. Every guarantee in this document evaporates
+silently: no diagnostic, no warning, a green build, and nobody finds out until
+the first `Date.now()` reaches production behind a `Result` that was never
+checked.
+
+Failing closed inverts that. The same rename produces a wall of diagnostics,
+which is annoying for ten minutes and correct forever after. The cost is paid on
+the first run of an existing codebase, when entry points and scripts light up
+until they are marked. That is the same trade every strict tool makes.
+
+## Why ban `try` as well as `throw`?
+
+Because the two together are what let the type checker take over.
+
+Banning `throw` alone leaves a gap: domain code that calls something throwing,
+catches it, and converts. That is a second, hand-rolled error path in every file
+that does it, and the previous rule set tried to police it with a return-type
+analysis that reported the same throw twice.
+
+Ban both and the analysis is unnecessary. A function that can neither throw nor
+catch has exactly one way to report failure: return it. `deno check` then
+propagates that type outward for free, which is a stronger guarantee than any
+lint rule could give, and it is the reason the rule is worth its strictness.
+
+The catching still has to happen somewhere. It happens once, in the prelude's
+`handleThrow`, which is the only function in the codebase with a `catch` in it.
+
+## Why is discarding a value an error?
+
+Because "did you handle this `Result`?" is the question everyone wants and
+nobody can answer syntactically, and "did you throw a value away?" is a question
+that can be answered syntactically and turns out to be the same question.
+
+Deciding whether an expression is a `Result` needs type information. The linter
+has none. But consider what a discarded value means inside a function that is
+already guaranteed pure by the other rules: either the call did nothing, in
+which case it is dead code, or it did something, in which case the purity
+guarantee was already broken. Both are defects. Neither requires knowing the
+type.
+
+The rule catches more than it was aimed at, which is the sign it was aimed
+correctly: ignored `Result` values, floating promises, and fire-and-forget
+effects are one violation, not three.
+
+`void expr` is reported too. An explicit discard is still a discard, and letting
+`void` through would turn the rule into a formality.
+
+## Why is a cast to a local type allowed?
+
+Because otherwise smart constructors would be impossible, and smart constructors
+are how this style makes illegal states unrepresentable.
+
+The pattern needs one cast:
+
+```ts
+type Email = string & { readonly _brand: unique symbol };
+
+export const parseEmail = (raw: string): Result<ParseError, Email> =>
+  raw.includes("@") ? ok(raw as Email) : err({ _tag: "NotAnEmail" });
 ```
 
-### Running the Linter
-```bash
-# Run linter
-deno lint
-
-# Run linter with auto-fix
-deno lint --fix
-```
-
-### Configuration Options
-You can customize the plugin behavior by passing options:
-
-```jsonc
-{
-  "lint": {
-    "plugins": [ 
-      ["jsr:@light-fp/deno-lint-plugin", {
-        "effectIdentifiers": ["IO", "Console", "FS", "Clock", "Env", "Throw", "State"],
-        "adapterGlobs": ["**/src/adapters/**/*.ts"],
-        "domainGlobs": ["**/src/**/*.ts"],
-        "ignoreGlobs": ["**/tests/**/*.ts"]
-      }] 
-    ]
-  }
-}
-```
-
-### Default Configuration
-The plugin comes with sensible defaults (see `src/util/options.ts`):
-- **Effect identifiers**: `["IO", "Console", "FS", "Clock", "Env", "Throw", "State"]`
-- **Allowed brand functions**: `["brand", "brandWithCapability", "withCapability", "withIOCapability", "withConsoleCapability", "withClockCapability", "withEnvCapability", "map", "chain", "zip", "mapArray", "raise", "handleThrow"]`
-- **Adapter globs**: `["**/src/adapters/**/*.ts"]`
-- **Domain globs**: `["**/src/**/*.ts", "**/tests/**/*.ts"]`
-- **Ignore globs**: `["**/tests/**/*.ts"]`
-- **Allowed throw paths**: `["**/src/effect-brands.ts", "**/tests/**/*.ts"]`
-
----
-
-## 3. What are the core rules enforced by this plugin and what coding patterns do they prevent or encourage?
-
-### Rule 1: `light-fp/effect-brand-origin`
-**Purpose**: Ensure effect brands originate from approved helpers
-
-**Prevents**:
-- Creating effect-branded values from raw expressions
-- Bypassing the effect tracking system
-
-**Encourages**:
-- Using approved helper functions like `brand()`, `brandWithCapability()`, `withCapability()`
-- Proper effect tracking throughout the codebase
-
-**Auto-fix**: Wraps expressions with `brand(...)` when safe
-
----
-
-### Rule 2: `light-fp/no-direct-effect-assertion`
-**Purpose**: Disallow TypeScript `as` assertions to attach effect brands
-
-**Prevents**:
-```typescript
-// ❌ BAD: Using type assertion to add effect brand
-const io = someValue as IO<string>;
-```
-
-**Encourages**:
-```typescript
-// ✅ GOOD: Using approved helper
-const io = brand(someValue);
-```
-
----
-
-### Rule 3: `light-fp/result-type-usage`
-**Purpose**: Forbid raw `throw` statements in domain functions; prefer `Result<E, A>`
-
-**Prevents**:
-```typescript
-// ❌ BAD: Throwing exceptions in domain code
-export function parseUser(data: unknown): User {
-  throw new Error("Invalid user data");
-}
-```
-
-**Encourages**:
-```typescript
-// ✅ GOOD: Returning Result type
-export function parseUser(data: unknown): Result<User, ValidationError> {
-  return err({ type: "invalid_data", message: "Invalid user data" });
-}
-```
-
----
-
-### Rule 4: `light-fp/interface-vs-type`
-**Purpose**: Prefer `type` for data structures and `interface` for capabilities/ports
-
-**Prevents**:
-```typescript
-// ❌ BAD: Interface for data
-interface User {
-  id: string;
-  name: string;
-}
-
-// ❌ BAD: Type for capabilities
-type Logger = {
-  readonly log: (msg: string) => void;
-};
-```
-
-**Encourages**:
-```typescript
-// ✅ GOOD: Type for data
-type User = {
-  readonly id: string;
-  readonly name: string;
-};
-
-// ✅ GOOD: Interface for capabilities
-interface Logger {
-  readonly log: (msg: string) => void;
-}
-```
-
-**Auto-fix**: Automatically converts between `type` and `interface` when appropriate
-
----
-
-### Rule 5: `light-fp/readonly-data`
-**Purpose**: Enforce `readonly` properties and arrays in data type literals
-
-**Prevents**:
-```typescript
-// ❌ BAD: Mutable properties
-type User = {
-  id: string;
-  roles: string[];
-};
-```
-
-**Encourages**:
-```typescript
-// ✅ GOOD: Readonly properties and arrays
-type User = {
-  readonly id: string;
-  readonly roles: readonly string[];
-};
-```
-
----
-
-### Rule 6: `light-fp/no-class`
-**Purpose**: Disallow classes in domain code; prefer algebraic data types and functions
-
-**Prevents**:
-```typescript
-// ❌ BAD: Classes in domain code
-export class UserService {
-  constructor(private db: Database) {}
-  
-  async createUser(data: UserData): Promise<User> {
-    // ...
-  }
-}
-```
-
-**Encourages**:
-```typescript
-// ✅ GOOD: Functions and closures
-export const createUserService = (db: Database) => ({
-  createUser: async (data: UserData): Promise<Result<User, Error>> => {
-    // ...
-  }
-});
-```
-
----
-
-### Rule 7: `light-fp/imports-boundary`
-**Purpose**: Domain code must not import from adapters
-
-**Prevents**:
-```typescript
-// ❌ BAD: Domain importing from adapters
-// src/domain/user.ts
-import { DatabaseAdapter } from "../adapters/database.ts";
-```
-
-**Encourages**:
-```typescript
-// ✅ GOOD: Domain depends on ports/interfaces
-// src/domain/user.ts
-import type { Database } from "../ports/database.ts";
-
-export const createUser = (db: Database) => async (data: UserData) => {
-  // ...
-};
-```
-
----
-
-### Rule 8: `light-fp/no-top-level-effects`
-**Purpose**: No side-effects at module top level in domain files
-
-**Prevents**:
-```typescript
-// ❌ BAD: Side effects at top level
-export const now = Date.now();
-export const config = Deno.env.get("CONFIG");
-const response = await fetch("https://api.example.com");
-```
-
-**Encourages**:
-```typescript
-// ✅ GOOD: Side effects behind functions/adapters
-export const createClock = () => ({
-  now: () => Date.now()
-});
-```
-
----
-
-### Rule 9: `light-fp/no-new`
-**Purpose**: Disallow `new` keyword in domain code
-
-**Prevents**:
-```typescript
-// ❌ BAD: Using new in domain
-const date = new Date();
-const map = new Map();
-```
-
-**Encourages**:
-```typescript
-// ✅ GOOD: Factory functions
-const createClock = () => ({ now: () => Date.now() });
-```
-
----
-
-### Rule 10: `light-fp/no-this`
-**Purpose**: Disallow `this` keyword in domain code
-
-**Prevents**:
-```typescript
-// ❌ BAD: Using this
-function updateUser() {
-  this.name = "New Name";
-}
-```
-
-**Encourages**:
-```typescript
-// ✅ GOOD: Explicit parameters and closures
-const updateUser = (user: User, name: string): User => ({
-  ...user,
-  name
-});
-```
-
----
-
-## 4. How does the effect branding system work and what are the approved helpers for creating effect-branded values?
-
-### What is Effect Branding?
-Effect branding is a type-level mechanism to track side effects in your code. Effects are represented as type brands (e.g., `IO`, `Console`, `FS`, `Clock`) that are attached to values to indicate they perform or require side effects.
-
-### How It Works
-1. **Effect Types**: Special branded types like `IO<T>`, `Console<T>`, `FS<T>` indicate that a value carries a specific effect
-2. **Tracking**: The plugin tracks where effect-branded values originate
-3. **Validation**: Ensures effect brands only come from approved helper functions
-4. **Propagation**: Effect-branded values can be passed around and composed
-
-### Default Effect Identifiers
-The plugin recognizes these effect brands by default:
-- `IO` - General I/O operations
-- `Console` - Console logging
-- `FS` - File system operations
-- `Clock` - Time-related operations
-- `Env` - Environment variable access
-- `Throw` - Operations that can throw
-- `State` - Stateful operations
-
-### Approved Helper Functions
-The plugin allows these functions to create effect-branded values:
-
-#### Core Branding Functions
-- **`brand(name, run)`** - Attach an effect brand to a value
-- **`brandWithCapability(name, capability, run)`** - Brand with a capability token and execution plan
-- **`withCapability(capability)`** - Create a branded value with a capability
-
-#### Specific Capability Helpers
-- **`withIOCapability()`** - Create IO-branded values
-- **`withConsoleCapability()`** - Create Console-branded values
-- **`withClockCapability()`** - Create Clock-branded values
-- **`withEnvCapability()`** - Create Env-branded values
-
-#### Composition Functions
-- **`map(fn, branded)`** - Transform a branded value
-- **`chain(fn, branded)`** - Flatmap over branded values
-- **`zip(...branded)`** - Combine multiple branded values
-- **`mapArray(fn, array)`** - Map over arrays of branded values
-
-#### Error Handling
-- **`raise(error)`** - Create a Throw-branded error
-- **`handleThrow(fn)`** - Convert throws to Result types
-
-### Example Usage
-```typescript
-// ✅ GOOD: Using approved helpers
-const readFile = (path: string): IO<string> =>
-  brand("IO", () => Deno.readTextFile(path));
-
-const log = (msg: string): Console<void> =>
-  withConsoleCapability(console, async (cap) => cap.log(msg));
-
-// ✅ GOOD: Composing effects
-const program = map(
-  (content) => content.toUpperCase(),
-  readFile("config.json")
-);
-
-// ❌ BAD: Direct assertion
-const badIO = someValue as IO<string>;
-
-// ❌ BAD: Raw expression without branding
-const badRead: FS<string> = Deno.readTextFileSync("file.txt");
-```
-
----
-
-## 5. What is the difference between domain code and adapter code in terms of rule enforcement and architectural boundaries?
-
-### Architectural Layers
-
-#### Domain Code
-**Location**: Typically in `src/domain/` or `src/` (configurable via `domainGlobs`)
-
-**Purpose**: Contains pure business logic, data types, and domain rules
-
-**Characteristics**:
-- Pure functions (no direct side effects)
-- No I/O operations
-- No external dependencies
-- Uses ports/interfaces for capabilities
-- Returns `Result` types instead of throwing
-
-**Rules Applied**:
-- ✅ All 10 rules are enforced
-- ❌ Cannot import from adapters
-- ❌ Cannot use classes, `new`, `this`
-- ❌ Cannot throw exceptions
-- ❌ Cannot have top-level side effects
-- ✅ Must use `type` for data, `interface` for ports
-- ✅ Must use `readonly` properties
-
-#### Adapter Code
-**Location**: Typically in `src/adapters/` (configurable via `adapterGlobs`)
-
-**Purpose**: Implements ports/interfaces with actual side effects and external dependencies
-
-**Characteristics**:
-- Can perform I/O operations
-- Can use external libraries
-- Can interact with Deno APIs
-- Implements domain interfaces
-- Bridges pure domain to impure world
-
-**Rules Applied**:
-- ✅ Effect branding rules still apply
-- ✅ Type discipline rules apply
-- ❌ Domain-specific restrictions are **relaxed**:
-  - Can use classes if needed
-  - Can use `new` keyword
-  - Can use `this`
-  - Can have top-level effects
-  - Can throw exceptions (though Result is still preferred)
-
-### Directory Structure Example
-```
-src/
-├── domain/              # Pure business logic
-│   ├── user.ts         # User types and functions
-│   └── validation.ts   # Validation logic
-├── ports/              # Interface definitions
-│   ├── database.ts     # Database port interface
-│   └── logger.ts       # Logger port interface
-└── adapters/           # Implementations with side effects
-    ├── sqlite-db.ts    # SQLite database adapter
-    └── console-logger.ts # Console logger adapter
-```
-
-### Import Rules
-
-#### ✅ Allowed
-```typescript
-// Domain importing ports
-// src/domain/user.ts
-import type { Database } from "../ports/database.ts";
-
-// Adapter importing domain
-// src/adapters/sqlite-db.ts
-import type { User } from "../domain/user.ts";
-import type { Database } from "../ports/database.ts";
-
-// Adapter importing other adapters (if needed)
-// src/adapters/composite.ts
-import { createLogger } from "./console-logger.ts";
-```
-
-#### ❌ Forbidden
-```typescript
-// Domain importing adapters - VIOLATION!
-// src/domain/user.ts
-import { SqliteDatabase } from "../adapters/sqlite-db.ts"; // ❌ ERROR
-```
-
-### Configuration
-You can customize which files are considered domain vs adapter:
-
-```jsonc
-{
-  "lint": {
-    "plugins": [ 
-      ["jsr:@light-fp/deno-lint-plugin", {
-        "domainGlobs": ["**/src/domain/**/*.ts", "**/src/core/**/*.ts"],
-        "adapterGlobs": ["**/src/adapters/**/*.ts", "**/src/infra/**/*.ts"],
-        "ignoreGlobs": ["**/tests/**/*.ts", "**/scripts/**/*.ts"]
-      }] 
-    ]
-  }
-}
-```
-
-### Benefits of This Separation
-1. **Testability**: Domain logic can be tested without side effects
-2. **Portability**: Domain code is independent of infrastructure
-3. **Maintainability**: Clear separation of concerns
-4. **Flexibility**: Easy to swap adapter implementations
-5. **Reasoning**: Pure domain code is easier to understand and verify
-
----
-
-## Additional Resources
-
-- **Source Code**: `/src/mod.ts` - Plugin entry point
-- **Rule Implementations**: `/src/rules/` - Individual rule definitions
-- **Configuration**: `/src/util/options.ts` - Default options and types
-- **Examples**: `/examples/` - Example code showing violations and fixes
-- **Tests**: `/tests/` - Unit and E2E tests
-
-## Development Commands
-
-```bash
-# Run unit tests
-deno task test
-
-# Run E2E tests (verifies auto-fix behavior)
-deno task test:e2e
-
-# Lint example code
-deno task examples:lint
-
-# Format code
-deno task fmt
-
-# Publish to JSR
-deno publish
-```
+That cast is the whole point of the file. Every other cast to `Email` anywhere
+else in the codebase is a forgery, and is reported.
+
+The distinction the rule can actually draw is "is the target type declared in
+this file". It works because the style already colocates a brand with its
+constructor, and it fails for a codebase that centralises brands in one module
+and constructors in another. Such a codebase must colocate them or suppress the
+rule with a reason. This is the one place where the rule shapes the code rather
+than the other way round, and it is a deliberate trade: the alternative is
+either no brands or no rule.
+
+## Why not track where effect brands come from?
+
+The previous version had a rule for this. It maintained a set of identifiers
+believed to hold branded values and a stack of function return types, and tried
+to conclude that a branded value could only originate from an approved helper.
+
+Without type information, that analysis cannot be sound and cannot be complete.
+It cannot follow a value through a function call, an array, or another module,
+and any rename defeats it. What it can do is produce confident diagnostics that
+are sometimes wrong, which is worse than producing none.
+
+The guarantee it wanted is available a different way. Give the brand a
+non-exported `unique symbol`, and forging one requires a cast. Ban the cast, and
+the brand is unforgeable, enforced by the type checker rather than approximated
+by the linter. That is what `no-unsafe-cast` is for.
+
+## Why is `new` allowed?
+
+A blanket ban on `new` fires on `new Map()`, `new Set()`, `new URL()`,
+`new RegExp()`, and `new TextEncoder()`. All of them are deterministic value
+constructors, and all of them are ordinary in pure code.
+
+A rule whose diagnostics are usually wrong teaches people to suppress it, and a
+suppression habit is contagious: the next diagnostic gets suppressed too,
+whether or not it was right. Precision is not a nicety in a lint rule, it is
+what keeps the rule believed.
+
+The constructors that are genuinely effectful are named individually in
+`no-ambient-effects`: `new Date()` with no arguments reads the clock,
+`new WebSocket` opens a socket. `new Date(ms)` converts a number and is fine.
+
+## Why must suppressions carry a reason?
+
+A strict gate accumulates holes. That is not a failure of the gate, it is what
+happens when real code meets real deadlines. The question is whether the holes
+stay visible.
+
+An unsigned `// deno-lint-ignore light-fp/no-throw` is unreadable six months
+later. Nobody can tell whether it was a considered exception or someone clearing
+a build, so nobody removes it, and it becomes permanent. A signed one can be
+judged, and often removed.
+
+The file-wide `deno-lint-ignore-file` is refused entirely, because a whole file
+leaving the gate is a layer decision. Make it a layer decision: a pragma, which
+one `grep` enumerates.
+
+## Why do the examples have their own `deno.json`?
+
+The `.bad.ts` files are deliberately full of violations. Linting them as part of
+the repository's own gate would mean the repository never passes its own CI.
+
+Giving `examples/` its own configuration solves that and earns something extra:
+the file is a worked consumer setup, so anyone adopting the plugin can copy it.
+The corpus is verified by `tests/examples_test.ts` instead, which asserts that
+every `.good.ts` file is clean and every `.bad.ts` file is not. Documentation
+that is executed cannot drift from the code, which is exactly how the previous
+version came to describe rules it did not have.
+
+## Why does the plugin's own source carry adapter pragmas?
+
+Because it is honest, and because refusing to answer the question would be
+worse.
+
+A lint rule adapts an imperative visitor API. It reports through a callback that
+returns nothing, which `no-discarded-values` correctly flags, and it is driven
+by traversal it does not own. That is adapter-shaped work, and the pragma says
+so with a reason attached.
+
+`src/layer.ts` is different: it is pure logic over a string and an AST, and it
+holds as domain code with no exemption. That the gate can be turned on its own
+implementation, and that the part which should pass does pass, is the only
+evidence worth having that the rules are livable.
+
+## What this cannot do
+
+Listed in the [README](README.md#limits), and worth repeating as a principle:
+the linter proves shapes, not properties. Several rules exist specifically so
+that `deno check` can prove the properties afterwards. A gate that claimed more
+than it delivers would be worse than no gate, because people would stop
+checking.

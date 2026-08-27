@@ -35,5 +35,6 @@ async function main() {
   console.log("Onboarding plan executed successfully", outcome.value);
 }
 
-// Auto-fix benefit: adding `--fix` keeps import order stable and removes unused ports automatically.
+// This adapter owns the effects the domain refuses to touch: it builds the
+// clients, reads the environment, and runs the plans the domain returns.
 main();

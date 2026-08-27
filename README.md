@@ -1,165 +1,51 @@
 # @light-fp/deno-lint-plugin
 
-[![Version](https://img.shields.io/badge/version-0.3.0-blue)](deno.json)
+[![Version](https://img.shields.io/badge/version-0.4.0-blue)](deno.json)
 [![JSR](https://img.shields.io/badge/jsr-@light--fp%2Fdeno--lint--plugin-black?logo=deno)](https://jsr.io/@light-fp/deno-lint-plugin)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-> Deno lint plugin that keeps Light Functional Programming discipline enforceable, testable, and discoverable across your TypeScript codebase.
+A Deno lint plugin that enforces Light Functional Programming in TypeScript:
+pure domain modules, errors as values, immutable data, and a hexagonal boundary
+between domain and adapters.
 
-## Table of Contents
-- [Quick Start](#quick-start)
-- [Installation](#installation)
-  - [Local Development](#local-development)
-  - [JSR Usage](#jsr-usage)
-- [Distribution & Installation](#distribution--installation)
-  - [Publisher Playbook (JSR)](#publisher-playbook-jsr)
-  - [Consumer Setup](#consumer-setup)
-  - [Why JSR](#why-jsr)
-  - [Caveats & Special Considerations](#caveats--special-considerations)
-  - [Live Examples](#live-examples)
-- [Configuration](#configuration)
-- [Effect Branding Overview](#effect-branding-overview)
-- [Domain vs Adapter Boundary](#domain-vs-adapter-boundary)
-- [Rule Reference](#rule-reference)
-  - [Effect Management Rules](#effect-management-rules)
-  - [Type System Rules](#type-system-rules)
-  - [Architectural Rules](#architectural-rules)
-  - [Object-Oriented Restrictions](#object-oriented-restrictions)
-- [Migration Guide](#migration-guide)
-- [Best Practices](#best-practices)
-- [Auto-fix Workflow](#auto-fix-workflow)
-- [Common Patterns & Anti-Patterns](#common-patterns--anti-patterns)
-- [Troubleshooting & FAQ](#troubleshooting--faq)
-- [Further Reading](#further-reading)
-- [Project Scripts](#project-scripts)
+## Contents
 
-## Quick Start
-1. **Add the plugin to `deno.json`:**
-   ```jsonc
-   {
-     "lint": {
-       "plugins": ["./src/mod.ts"]
-     }
-   }
-   ```
-   Replace `"./src/mod.ts"` with `"jsr:@light-fp/deno-lint-plugin"` once you depend on the published package.
+- [What the gate guarantees](#what-the-gate-guarantees)
+- [Quick start](#quick-start)
+- [Layers](#layers)
+- [Rules](#rules)
+- [Suppressing a rule](#suppressing-a-rule)
+- [Adopting on an existing codebase](#adopting-on-an-existing-codebase)
+- [Limits](#limits)
+- [Development](#development)
 
-2. **Create minimal effect helpers** (`src/domain/effects.ts`) so branded plans compile:
-   ```ts
-   export type Result<E, A> =
-     | { readonly _tag: "Ok"; readonly value: A }
-     | { readonly _tag: "Err"; readonly error: E };
+## What the gate guarantees
 
-   export const ok = <E, A>(value: A): Result<E, A> => ({ _tag: "Ok", value });
-   export const err = <E, A>(error: E): Result<E, A> => ({ _tag: "Err", error });
+For a file in the domain layer, the rules together guarantee that:
 
-   export type Effect<Name extends string, A> = {
-     readonly effect: Name;
-     readonly run: () => Promise<A>;
-   };
+- importing it runs nothing;
+- it cannot reach the platform, an adapter, or the clock;
+- it cannot throw, catch, or discard a value;
+- its data is readonly;
+- its types cannot be forged by a cast.
 
-   export type WithCapability<Name extends string, C, A> = {
-     readonly effect: Name;
-     readonly capability: C;
-     readonly run: (cap: C) => Promise<A>;
-   };
+The linter proves shapes. It cannot prove properties, so the gate has three legs
+and needs all of them:
 
-   export const brandWithCapability = <Name extends string, C, A>(
-     name: Name,
-     capability: C,
-     run: (cap: C) => Promise<A>,
-   ): WithCapability<Name, C, A> => ({
-     effect: name,
-     capability,
-     run,
-   });
+| Command      | Proves                                                                        |
+| ------------ | ----------------------------------------------------------------------------- |
+| `deno lint`  | shapes: the rules in this plugin                                              |
+| `deno check` | types: exhaustiveness and Result propagation, which the shapes make checkable |
+| `deno test`  | whole-repo invariants: your own tests                                         |
 
-   export const brand = <Name extends string, A>(name: Name, run: () => Promise<A>): Effect<Name, A> => ({
-     effect: name,
-     run,
-   });
+Several rules exist to make the second column possible. `no-throw` removes the
+path by which an error escapes its type. `no-unsafe-cast` removes the escape
+hatch that would let a bad value claim a good type.
 
-   export const handleThrow = async <E, A>(
-     run: () => Promise<A>,
-     onError: (cause: unknown) => E,
-   ): Promise<Result<E, A>> => {
-     try {
-       return ok(await run());
-     } catch (cause) {
-       return err(onError(cause));
-     }
-   };
-   ```
+## Quick start
 
-3. **Create your first domain file** (`src/domain/login.ts`) with an intentional violation to see the rule feedback:
-   ```ts
-   // ❌ Domain code mixing effects and throwing
-   export async function login(email: string, password: string) {
-     if (!email.includes("@")) {
-       throw new Error("Invalid email");
-     }
-     const response = await fetch("https://api.example.com/login", {
-       method: "POST",
-       body: JSON.stringify({ email, password }),
-     });
-   return response.json();
-   }
-   ```
+Add the plugin to `deno.json`:
 
-4. **Run the linter:**
-   ```bash
-   deno lint
-   ```
-   You will see diagnostics from the plugin (`result-type-usage`, `no-top-level-effects`, `imports-boundary`, and more).
-
-5. **Refactor into Light FP style** and re-run the linter:
-   ```ts
-   // ✅ Pure domain plan that the adapters can execute
-   import { brandWithCapability, err, ok, type Result, type WithCapability } from "./effects.ts";
-
-   type LoginError =
-     | { readonly type: "InvalidEmail"; readonly message: string }
-     | { readonly type: "Network"; readonly message: string };
-
-   type LoginPorts = {
-     readonly request: (body: { readonly email: string; readonly password: string }) => Promise<{ readonly ok: boolean; readonly json: () => Promise<unknown> }>;
-   };
-
-   type HttpPlan = WithCapability<"IO", LoginPorts, Result<LoginError, unknown>>;
-
-   export const planLogin = (
-     ports: LoginPorts,
-     email: string,
-     password: string,
-   ): Result<LoginError, HttpPlan> => {
-     if (!email.includes("@")) return err({ type: "InvalidEmail", message: "Email must contain @" });
-     return ok(
-       brandWithCapability("IO", ports, async (cap) => {
-         const response = await cap.request({ email, password });
-         if (!response.ok) return err({ type: "Network", message: "Request failed" });
-         return ok(await response.json());
-       }),
-     );
-   };
-   ```
-   The function is now pure, returns `Result`, and surface-level effects are encoded in the branded plan.
-
-6. **Explore the curated examples** under `examples/src/` for complete before/after walkthroughs covering authentication, validation, HTTP orchestration, persistence, and effect composition.
-
-## Installation
-
-### Local Development
-Use the local path while iterating on the plugin:
-```jsonc
-{
-  "lint": {
-    "plugins": ["./src/mod.ts"]
-  }
-}
-```
-
-### JSR Usage
-After publishing to JSR (`version: 0.3.0`):
 ```jsonc
 {
   "lint": {
@@ -167,348 +53,306 @@ After publishing to JSR (`version: 0.3.0`):
   }
 }
 ```
-Keep the plugin as the final entry in your plugins list so it can build on upstream diagnostics.
 
-## Distribution & Installation
+Run `deno lint`. Every file is treated as domain unless its path or its header
+says otherwise, so expect diagnostics on entry points and scripts on the first
+run. Mark those as adapters:
 
-### Publisher Playbook (JSR)
-Deno positions JSR as the canonical registry for modern TypeScript packages, including lint plugins, so treat it as the default publication target for this project.
+```ts
+// @light-fp adapter
+```
 
-1. **Create or sign in to a JSR account** using GitHub—this is the only supported authentication path today.
-2. **Reserve a scope and package name** that matches your plugin (`@light-fp/deno-lint-plugin`). You can configure the scope and visibility from the JSR dashboard before your first publish.
-3. **Ensure `deno.json` (or `jsr.json`) declares the correct metadata**: include `"name"`, `"version"`, and an `"exports"` map so JSR knows how to serve the package, and keep the source ESM-only with full file extensions because JSR rewrites bare specifiers to fully qualified URLs.
-4. **Verify plugin wiring locally** by pointing `deno.json` at `./src/mod.ts` and running `deno lint` so you catch rule regressions before shipping to users.
-5. **Run quality gates**: `deno doc --lint` and `deno lint` surface documentation and style issues the registry will reject, and `deno publish --dry-run` confirms what files will ship.
-6. **Publish the release** with `deno publish` (or `npx jsr publish`) once the dry run succeeds. You can automate this step via CI, but manual publishes are supported as long as you are logged in.
-7. **Follow semantic versioning**: JSR packages are immutable, so bump the version every time (e.g., patch for bug fixes, minor for new rules, major for breaking defaults) before publishing.
+Write a prelude module holding `Result` and the helpers that need to catch:
 
-### Consumer Setup
-1. **Add the dependency**. `deno add @light-fp/deno-lint-plugin` records the package in `deno.json` (or `deno.jsonc`) and updates `deno.lock`.
-2. **Reference the plugin with an explicit semver range** so CI detaches from unpublished development versions:
-   ```jsonc
-   {
-     "lint": {
-       "plugins": [
-         ["jsr:@light-fp/deno-lint-plugin@^0.3.0", {
-           "adapterGlobs": ["**/src/adapters/**/*.ts"],
-           "domainGlobs": ["**/src/**/*.ts", "**/tests/**/*.ts"]
-         }]
-       ]
-     }
-   }
-   ```
-   The `@^0.3.0` prefix keeps you on compatible minor releases while locking out breaking majors.
-3. **Run `deno lint --fix`** to confirm the plugin loads and to apply safe auto-fixes in your project.
-4. **Commit the updated `deno.lock`** so team members and CI resolve the same plugin version; JSR’s immutable packages guarantee reproducible installs.
+```ts
+// @light-fp prelude
+export type Result<E, A> =
+  | { readonly _tag: "Ok"; readonly value: A }
+  | { readonly _tag: "Err"; readonly error: E };
 
-### Why JSR
-- **First-class TypeScript support and automatic documentation** differentiate JSR from publishing to npm or `deno.land/x`.
-- **Native integration with Deno tooling** (`deno add`, `deno publish`, registry-backed linting) means less configuration than npm packages, which require extra shim metadata.
-- **Import rewriting and module verification** ensure consumers get ESM-friendly specifiers with full extensions, something `deno.land/x` cannot enforce.
-- **Alternatives**: local paths (`"./src/mod.ts"`) remain useful for development, and npm packages (`"npm:..."`) can work but demand bundling CommonJS/ESM builds and produce slower installs—JSR avoids both trade-offs.
+export const ok = <E, A>(value: A): Result<E, A> => ({ _tag: "Ok", value });
+export const err = <E, A>(error: E): Result<E, A> => ({ _tag: "Err", error });
 
-### Caveats & Special Considerations
-- The lint plugin API shipped in Deno 2.2 and is still flagged experimental, so recommend Deno ≥ 2.2 for consumers and monitor release notes for breaking changes.
-- JSR only serves ESM modules; keep `.ts` (or transpiled `.mjs`) sources with explicit extensions and avoid Node-style resolution.
-- Publishing from CI requires a JSR token tied to your GitHub identity—there is no alternative auth flow today.
-- Releases are immutable; to retract a faulty build you must publish a new, higher version and deprecate the old one.
-
-### Live Examples
-- `@studios/lint` — a community rule pack published through JSR’s lint plugin contest, showcasing best-practice packaging.
-- `@lambtron/andys-lint-rule` — single-rule plugin demonstrating minimal configuration and documentation.
-- Contest entries such as `@armaanas/no-empty-function` illustrate how teams submit specialty rules via JSR with the same workflow.
-
-## Configuration
-All rules share a single options object. Set it in `deno.json` alongside the plugin entry.
-
-```jsonc
-{
-  "lint": {
-    "plugins": [
-      ["jsr:@light-fp/deno-lint-plugin", {
-        "effectIdentifiers": ["IO", "Console", "FS", "Clock", "Env", "Throw", "State"],
-        "allowedBrandFunctions": ["brand", "brandWithCapability", "withCapability", "withIOCapability", "withConsoleCapability", "withClockCapability", "withEnvCapability", "map", "chain", "zip", "mapArray", "raise", "handleThrow"],
-        "allowedBrandAssertionPaths": ["**/src/effect-brands.ts"],
-        "adapterGlobs": ["**/src/adapters/**/*.ts"],
-        "domainGlobs": ["**/src/**/*.ts", "**/tests/**/*.ts"],
-        "ignoreGlobs": ["**/tests/**/*.ts"],
-        "allowedThrowPaths": ["**/src/effect-brands.ts", "**/tests/**/*.ts"]
-      }]
-    ]
+export const handleThrow = async <E, A>(
+  run: () => Promise<A>,
+  onError: (cause: unknown) => E,
+): Promise<Result<E, A>> => {
+  try {
+    return ok(await run());
+  } catch (cause) {
+    return err(onError(cause));
   }
-}
-```
-
-| Option | Default | Purpose |
-| --- | --- | --- |
-| `effectIdentifiers` | `["IO","Console","FS","Clock","Env","Throw","State"]` | Recognised effect brands. Extend when you add new capability markers. |
-| `allowedBrandFunctions` | `["brand","brandWithCapability","withCapability","withIOCapability","withConsoleCapability","withClockCapability","withEnvCapability","map","chain","zip","mapArray","raise","handleThrow"]` | Helper names that may originate branded effects. |
-| `allowedBrandAssertionPaths` | `["**/src/effect-brands.ts"]` | Files where brand assertions are permitted (escape hatch). |
-| `adapterGlobs` | `["**/src/adapters/**/*.ts"]` | Files treated as adapters. Relaxed OO rules apply here. |
-| `domainGlobs` | `["**/src/**/*.ts","**/tests/**/*.ts"]` | Files treated as domain. Strict FP rules apply here. |
-| `ignoreGlobs` | `["**/tests/**/*.ts"]` | Files excluded from linting (still parsed but not enforced). |
-| `allowedThrowPaths` | `["**/src/effect-brands.ts","**/tests/**/*.ts"]` | Files permitted to throw (e.g., effect helpers, test harnesses). |
-
-## Effect Branding Overview
-Effect branding keeps side effects explicit in types:
-
-```ts
-import { brand, brandWithCapability, handleThrow } from "./src/domain/effects.ts";
-
-type FileIO<A> = A & { readonly IO: unique symbol };
-
-const readConfig = (path: string) =>
-  brand("IO", () => Deno.readTextFile(path)); // ✅ Effect birth is tracked
-
-const withConsole = brandWithCapability("Console", console, async (cap) => {
-  cap.log("hello");
-});
-
-const safeFetchJson = (url: string) =>
-  handleThrow(() => fetch(url).then((res) => res.json()), (cause) => ({ type: "Network", cause }));
-```
-
-- **Why it matters:** the plugin validates that branded values originate from approved helpers (`effect-brand-origin`) and are not forged via type assertions (`no-direct-effect-assertion`).
-- **Composition:** use `map`, `chain`, and `zip` (also on the allowlist) to build complex workflows without losing effect metadata.
-- **Testing:** domain functions return branded “plans” that tests can execute with fakes.
-
-See `examples/src/domain/auth_flow.good.ts` and friends for realistic composition patterns.
-
-## Domain vs Adapter Boundary
-
-```
-src/
-├─ domain/        # Pure business logic (strict rules apply)
-├─ adapters/      # I/O implementations (fetch, databases, console)
-├─ ports/         # Interfaces/capabilities (optional but recommended)
-└─ tests/         # Treated as domain by default (configurable)
-```
-
-- **Domain expectations:** no top-level effects, no classes, no `new`, no `this`, no adapter imports, and errors returned as `Result`.
-- **Adapter expectations:** own the side effects, instantiate dependencies, and execute branded plans from the domain.
-
-```ts
-// src/domain/profile.ts
-import type { HttpCapability } from "../adapters/http.ts"; // ❌ would violate imports-boundary
-
-// ✅ Prefer
-import type { HttpPort } from "../ports/http.ts";
-export const planProfile = (http: HttpPort) => ...
-```
-
-```ts
-// src/adapters/http.ts
-import { planProfile } from "../domain/profile.ts"; // ✅ Adapter owning the IO
-```
-
-Adapters execute the branded plans and translate them into real-world IO, keeping domain logic deterministic and unit-test friendly.
-
-## Rule Reference
-All rule keys live under the `light-fp/` namespace. They are grouped here for easier scanning.
-
-### Effect Management Rules
-
-#### `light-fp/effect-brand-origin`
-Ensures effect-branded values come from approved helpers.
-
-❌ Violation
-```ts
-const io = { effect: "IO", run: () => fetch(url) }; // Direct object literal
-```
-
-✅ Recommended
-```ts
-const io = brand("IO", () => fetch(url));
-```
-
-#### `light-fp/no-direct-effect-assertion`
-Disallows forging brands with type assertions.
-
-❌ Violation
-```ts
-const io = fetch(url) as IO<Response>;
-```
-
-✅ Recommended
-```ts
-const io = brand("IO", () => fetch(url));
-```
-
-#### `light-fp/result-type-usage`
-Replaces `throw` statements in domain code with `Result<E, A>`.
-
-❌ Violation
-```ts
-export function parseUser(payload: unknown): User {
-  throw new Error("invalid");
-}
-```
-
-✅ Recommended
-```ts
-export function parseUser(payload: unknown): Result<ParseError, User> {
-  return err({ type: "InvalidPayload" });
-}
-```
-
-### Type System Rules
-
-#### `light-fp/interface-vs-type`
-Use `type` for data structures, `interface` for capability ports. Auto-fix rewrites between the two when safe.
-
-❌ Violation
-```ts
-interface User {
-  id: string;
-  roles: string[];
-}
-```
-
-✅ Recommended
-```ts
-type User = {
-  readonly id: string;
-  readonly roles: readonly string[];
 };
 ```
 
-#### `light-fp/readonly-data`
-Enforces `readonly` properties and arrays in data type literals.
+`handleThrow` is the boundary. A throwing call goes in, a `Result` comes out,
+and no domain module catches anything itself.
 
-❌ Violation
-```ts
-type Session = {
-  token: string;
-  scopes: string[];
-};
+See `examples/src/` for worked before-and-after pairs covering authentication,
+validation, HTTP orchestration, persistence, and effect composition. Run
+`deno task examples:lint` to see the diagnostics on the `.bad.ts` files; every
+`.good.ts` file is clean, and a test enforces that.
+
+## Layers
+
+Deno lint plugins cannot take configuration. `lint.plugins` accepts strings
+only, and `RuleContext` has no `options` field, so a rule sees exactly one thing
+about its surroundings: the filename. Layers therefore come from the file
+itself.
+
+A file's layer is resolved in this order:
+
+1. **Header pragma.** The first comment matching `@light-fp domain`,
+   `@light-fp adapter`, or `@light-fp prelude` before the first statement. An
+   unrecognised token is reported, and the file stays in the strict layer.
+2. **Test files.** A name ending `_test.ts`, `.test.ts`, `_bench.ts`, or
+   `.bench.ts` is an adapter. Tests wire fakes and throw assertions.
+3. **Path.** A directory segment named `adapters`, `adapter`, `infra`,
+   `scripts`, or `bin`, or a basename of `main.ts`, is an adapter.
+4. **Everything else is domain.**
+
+Step 4 fails closed on purpose. A gate that failed open would disappear the
+moment someone renamed `src/domain/` to `src/core/`, and nothing would say so.
+Failing closed makes the mistake loud, and correcting it costs one line.
+
+It also makes every opt-out visible:
+
+```console
+$ grep -rn "@light-fp adapter" src/
 ```
 
-✅ Recommended
+That lists every file which left the strict layer. No glob configuration can
+answer the same question.
+
+| Layer     | Rules applied                              |
+| --------- | ------------------------------------------ |
+| `domain`  | all of them                                |
+| `adapter` | only `require-ignore-reason`               |
+| `prelude` | all except `no-throw` and `no-unsafe-cast` |
+
+The prelude is meant to be one module: the one defining `Result` and the effect
+brands, which legitimately needs `try/catch` and a brand-creating cast.
+
+## Rules
+
+### `light-fp/layer-boundary`
+
+Domain code names no adapter, in any import form: plain imports, re-exports,
+`export *`, dynamic `import()`, and side-effect-only imports. Matching is on
+path segments, so `../adapters/http.ts` and the sibling `../adapters.ts` both
+count, while an npm package called `my-adapters-helper` does not.
+
 ```ts
-type Session = {
-  readonly token: string;
-  readonly scopes: readonly string[];
-};
+import { fetchUser } from "../adapters/http.ts"; // reported
+import type { HttpPort } from "../ports/http.ts"; // fine
 ```
 
-### Architectural Rules
+### `light-fp/pure-module`
 
-#### `light-fp/imports-boundary`
-Domain code must not import from adapters.
+Importing a domain module runs nothing. Reports module-level `let` and `var`,
+bare call statements, top-level `await`, and top-level control flow. Anything
+inside a function body is fine, including `let`.
 
-❌ Violation
 ```ts
-// src/domain/session.ts
-import { fetchUser } from "../adapters/http.ts";
+let cache = new Map(); // reported
+main(); // reported
+export const makeCache = () => new Map(); // fine
 ```
 
-✅ Recommended
+### `light-fp/no-ambient-effects`
+
+The domain never touches the platform's ambient effect vocabulary, anywhere in
+the file. A closed list: `Deno`, `process`, `window`, `document`, `navigator`,
+`localStorage`, `sessionStorage`, `globalThis`, `console`; `fetch`, the timers,
+`queueMicrotask`, `requestAnimationFrame`, `addEventListener`, the prompts;
+`Date.now`, `Math.random`, `performance.now`, `crypto.randomUUID`,
+`crypto.getRandomValues`; `new Date()` with no arguments, `new WebSocket`,
+`new Worker`, `new XMLHttpRequest`, `new EventSource`, `new BroadcastChannel`.
+
+`new Date(ms)`, `Math.max`, `JSON.parse`, `structuredClone`, and `new Map` are
+deterministic and are not reported.
+
 ```ts
-import type { HttpPort } from "../ports/http.ts";
+const stamp = Date.now(); // reported
+const stamp = ports.clock.now(); // fine
 ```
 
-#### `light-fp/no-top-level-effects`
-No side effects at module scope in domain files.
+### `light-fp/no-throw`
 
-❌ Violation
+Errors are values. Reports `throw` and `try` alike: a function that can neither
+throw nor catch can only report failure as a value, which is what lets
+`deno check` propagate the error type from there. `new Error(...)` as a value
+inside `err(...)` is data and is fine.
+
 ```ts
-export const now = Date.now();
-const user = await fetch("https://api.example.com/user");
+if (!valid) throw new Error("invalid"); // reported
+if (!valid) return err({ _tag: "Invalid", reason }); // fine
 ```
 
-✅ Recommended
+### `light-fp/no-discarded-values`
+
+Every expression's value is used. This is the unhandled-`Result` check. Asking
+"is this a `Result`?" needs type information the linter does not have; asking
+"is a value being thrown away?" does not, and inside a pure function the two are
+the same question. It catches ignored `Result` values, floating promises, and
+fire-and-forget effects at once.
+
 ```ts
-export const planClock = withCapability({ now: () => Date.now() }, (cap) => cap.now());
+validateUser(input); // reported
+void save(x); // reported: an explicit discard is still a discard
+const checked = validateUser(input); // fine
 ```
 
-### Object-Oriented Restrictions
+Assignments and `++` are not reported: a local accumulator inside a pure
+function is Light FP, and immutability across boundaries is `readonly-data`'s
+job.
 
-#### `light-fp/no-class`
-Disallows classes in domain code; prefer functions and modules.
+### `light-fp/readonly-data`
 
-❌ Violation
+Data is immutable, at any nesting depth: type aliases, interface bodies, nested
+objects, generic arguments, and **every member of every discriminated union**.
+Also reports mutable arrays and `Map`/`Set` in data positions.
+
+Autofixable.
+
+```ts
+type ADT = { _tag: "A"; items: string[] } | { _tag: "B" }; // reported, twice
+type ADT =
+  | { readonly _tag: "A"; readonly items: readonly string[] }
+  | { readonly _tag: "B" }; // fine
+```
+
+Function parameter and return annotations are not reported. Requiring `readonly`
+on every parameter would be the noisiest rule in the set; this is a deliberate
+false-positive budget.
+
+### `light-fp/no-oo`
+
+Reports `class` declarations and expressions, `this`, `enum`, non-ambient
+`namespace`, decorators, parameter properties, and object-literal `get`/`set`
+accessors.
+
 ```ts
 export class CartService {
-  add(item: Item) { ... }
-}
+  add(i: Item) {
+    this.items.push(i);
+  }
+} // reported
+export const addItem = (cart: Cart, item: Item): Cart => ({
+  ...cart,
+  items: [...cart.items, item],
+}); // fine
 ```
 
-✅ Recommended
+### `light-fp/no-unsafe-cast`
+
+The type system cannot be overruled, so brands and `Result` types cannot be
+forged. Reports `as`, angle-bracket casts, `!`, `any` in annotations, and the
+`@ts-ignore`, `@ts-expect-error`, and `@ts-nocheck` comments.
+
+Two allowances: `as const`, and a cast to a type alias **declared in the same
+file**. The second is what makes smart constructors work without type
+information. Colocate a brand with its constructor and the cast is legal; a cast
+to a type from anywhere else is the forgery the rule exists to stop.
+
 ```ts
-export const createCart = (items: readonly Item[]) => ({ items });
+const io = fetchUser(url) as IO<Response>; // reported
+
+type Email = string & { readonly _brand: unique symbol };
+export const parseEmail = (raw: string): Result<ParseError, Email> =>
+  raw.includes("@") ? ok(raw as Email) : err({ _tag: "NotAnEmail" }); // fine
 ```
 
-#### `light-fp/no-new`
-Bans the `new` keyword in domain files.
+### `light-fp/prefer-type-for-data`
 
-❌ Violation
+An interface carrying data should be a `type`, so it composes into unions and
+intersections. Interfaces whose members are all functions describe capability
+ports and are left alone. Autofixable, except when the interface has `extends`.
+
+### `light-fp/require-ignore-reason`
+
+Every `light-fp` suppression carries a reason, and there is no file-wide off
+switch: a whole file leaves the gate through a layer pragma or `lint.exclude`,
+both of which one `grep` can enumerate.
+
+## Suppressing a rule
+
 ```ts
-const date = new Date();
+// deno-lint-ignore light-fp/no-ambient-effects -- seeded once at startup, never in a request
 ```
 
-✅ Recommended
+The reason must be at least ten characters. It is not ceremony: a strict gate
+survives only if its holes stay visible, and an unsigned suppression is a hole
+nobody can judge later.
+
+To relax a whole file, change its layer instead:
+
 ```ts
-const date = clock.now();
+// @light-fp adapter
 ```
 
-#### `light-fp/no-this`
-Prevents usage of `this` in domain code.
+## Adopting on an existing codebase
 
-❌ Violation
-```ts
-function updateName(this: User, name: string) {
-  this.name = name;
-}
+Turning this on everywhere at once produces a diagnostic count nobody will work
+through. Two orders that do work:
+
+**By layer.** Mark everything `// @light-fp adapter`, then move files to domain
+one at a time as you clean them. The pragma list shrinks as adoption grows, and
+`grep` shows exactly how far along you are.
+
+**By ratchet.** Freeze today's count and forbid new violations. `runPlugin`
+works inside `deno test`, where file access is normal, so a test can walk
+`src/`, count diagnostics per file, and compare against a committed baseline.
+New violations fail; a reduced count fails too, asking you to tighten the
+baseline, so progress cannot silently regress.
+
+## Limits
+
+Stated plainly, because a gate that overstates itself is worse than one that
+does not exist:
+
+- **The linter has no type information.** Every rule decides from one file's AST
+  plus its filename. There is no cross-file resolution.
+- **An imported effectful function is invisible.** `no-ambient-effects` works
+  from a closed list of platform names. If you wrap `fetch` in your own helper
+  and import it into the domain, only `layer-boundary` will catch it, and only
+  if the helper lives under an adapter path.
+- **Exhaustiveness is not checked here.** Give your functions explicit return
+  types and let `deno check` catch unhandled variants. Avoid `default` in a
+  switch over `_tag`, which is precisely what hides a missing variant.
+- **Mutation through an alias is not tracked.** `readonly-data` forces the
+  annotations; `deno check` enforces them from there.
+- **npm and node specifiers are not restricted.** A pure schema library in the
+  domain is legitimate, and banning it would only breed suppressions.
+
+## Development
+
+```console
+$ deno task ci   # fmt --check, check, lint, test
 ```
 
-✅ Recommended
-```ts
-const rename = (user: User, name: string) => ({ ...user, name });
-```
+Individually:
 
-## Migration Guide
-1. **Enable the plugin in CI** using the local path so developers see violations early.
-2. **Audit directory boundaries**: ensure `domainGlobs` and `adapterGlobs` reflect your layout before running `--fix`.
-3. **Codemod data types**: run `deno lint --fix` to convert obvious `interface`/`type` issues, then clean up `readonly` warnings manually.
-4. **Introduce ports**: replace direct adapter imports with interfaces; wire adapters in composition roots.
-5. **Adopt Result types** incrementally: wrap existing `throw` hot spots with `handleThrow` and return `Result`.
-6. **Capture new variability** as branded effects so testing remains deterministic.
+| Task                      | Purpose                           |
+| ------------------------- | --------------------------------- |
+| `deno task fmt`           | format                            |
+| `deno task lint`          | lint the plugin with itself       |
+| `deno task test`          | the full test suite               |
+| `deno task examples:lint` | diagnostics on the example corpus |
 
-## Best Practices
-- Keep **domain functions pure** and delegate side effects to adapters.
-- Store **effect helpers** (brand, withCapability, raise, etc.) in a shared module similar to `examples/src/domain/shared/primitives.ts`.
-- **Name capability interfaces** after the behavior they expose (`AuthPorts`, `ClockPort`) to aid discoverability.
-- **Treat tests as domain** by default; override `ignoreGlobs` if integration tests need relaxed rules.
-- **Document ports next to examples** so teams see how adapters fulfill them.
+The plugin lints its own source. `src/layer.ts` holds as domain code; the rule
+modules carry an adapter pragma, because a lint rule adapts an imperative
+visitor API and reports through a void callback.
 
-## Auto-fix Workflow
-1. Run `deno lint --fix` to apply safe fixes (e.g., `interface` ⇄ `type`, missing `readonly` suggestions where supported).
-2. Review remaining diagnostics—many require conscious architectural refactors.
-3. Pair auto-fix with `deno fmt` to keep formatting aligned.
-4. Use `deno task examples:lint` to see the plugin act on the curated before/after snippets.
+Tests use `Deno.lint.runPlugin`. `tests/rules_test.ts` is table-driven per rule
+and asserts exact diagnostic counts, so a rule that fires twice fails as loudly
+as one that never fires. `tests/fix_test.ts` asserts the exact text each fix
+produces and then typechecks it. `tests/examples_test.ts` pins the example
+corpus, so the documentation cannot drift away from what the rules do.
 
-## Common Patterns & Anti-Patterns
-- **Pattern:** Domain exports `planX` functions returning branded effects; adapters execute them.
-- **Pattern:** Data validation returns `Result<ValidationError[], Data>`; adapters translate errors into HTTP responses.
-- **Anti-pattern:** Calling `fetch`, `Deno.env`, or `Math.random` in domain files.
-- **Anti-pattern:** Passing mutable arrays/objects across boundaries; prefer `readonly`.
-- **Anti-pattern:** Hiding errors behind `console.log` in domain code—return a `Result` instead.
+## Further reading
 
-## Troubleshooting & FAQ
-- **“Why are my tests flagged?”** — By default tests are treated as domain code. Adjust `domainGlobs` and `ignoreGlobs` if integration tests require imperatively creating effects.
-- **“I need to assert a brand manually.”** — Add the file to `allowedBrandAssertionPaths`, but prefer refactoring toward approved helpers first.
-- **“Adapters still violate rules.”** — Ensure they match `adapterGlobs`; otherwise they inherit strict domain constraints.
-- **“How do I silence a rule temporarily?”** — Use standard `// deno-lint-ignore light-fp/<rule>` pragmas sparingly and document the follow-up.
-
-## Further Reading
-- [Q&A and design rationale](q_and_a.md)
-- [Before/after examples](examples/src/)
+- [Design rationale](q_and_a.md)
+- [Before and after examples](examples/src/)
 - [Rule implementations](src/rules/)
-- [Default options](src/util/options.ts)
-
-## Project Scripts
-- `deno task fmt` — Format the repo
-- `deno task lint` — Run Deno’s built-in linting (with this plugin)
-- `deno task test` — Execute unit tests with `--no-check`
-- `deno task test:e2e` — Verify rule behavior against fixtures
-- `deno task examples:lint` — Lint only the `examples/` directory to explore diagnostics quickly
+- [Layer resolution](src/layer.ts)

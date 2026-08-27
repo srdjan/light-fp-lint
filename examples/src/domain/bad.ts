@@ -1,20 +1,33 @@
-// Domain code with multiple violations
-import { Something } from "../adapters/side.ts"; // imports-boundary
+// A domain file that breaks most of the rules at once. Each comment names the
+// rule that reports the line above it. The paired good examples in this
+// directory show the same work done in the style the gate enforces.
+//
+// Do not run `deno lint --fix` over this file: the readonly and type-alias
+// violations are fixable, and fixing them would delete what the file is for.
+
+import { Something } from "../adapters/side.ts"; // layer-boundary
 
 export type User = {
-  id: string;
-  roles: string[]; // readonly-data
+  id: string; // readonly-data
+  roles: string[]; // readonly-data, twice: the property and the array
 };
 
-export interface Data { // interface-vs-type
+export interface Data { // prefer-type-for-data: it carries data, so it is a type
   readonly id: string;
-  readonly run: () => void; // not a pure data structure
+  readonly run: () => void;
 }
 
-export const now = Date.now(); // no-top-level-effects
+export const now = Date.now(); // no-ambient-effects
 
-export class Foo {} // no-class
+let requestCount = 0; // pure-module: module-level mutable state
 
-export function make(): Result<string, number> { // missing Result import in example
-  throw new Error("nope"); // result-type-usage
+export class Foo {} // no-oo
+
+export function make(): number {
+  throw new Error("nope"); // no-throw
 }
+
+export const record = (input: unknown) => {
+  Something.send(input); // no-discarded-values
+  return input as Foreign; // no-unsafe-cast: Foreign is not declared here
+};
