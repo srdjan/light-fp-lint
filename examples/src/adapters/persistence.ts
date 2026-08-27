@@ -1,4 +1,9 @@
 // Persistence adapter: keeps data in memory for demonstration purposes.
+//
+// Mutable state and in-place updates live here on purpose. This is the layer
+// that owns them, which is what lets the domain modules that use this port stay
+// pure. Nothing awaits, because there is no driver to await, so the port's
+// promise is returned directly rather than through an empty `async`.
 
 import type {
   UserRecord,
@@ -13,17 +18,17 @@ const rows: UserRow[] = [
 ];
 
 export const inMemoryRepo: UserRepositoryPort = {
-  async insert(record: UserRecord) {
+  insert(record: UserRecord) {
     const row: UserRow = {
       id: nextId++,
       email: record.email,
       roles: [...record.roles] as readonly string[],
     };
     rows.push(row);
-    return row.id;
+    return Promise.resolve(row.id);
   },
-  async findByRole(role: string) {
-    return rows.filter((row) => row.roles.includes(role));
+  findByRole(role: string) {
+    return Promise.resolve(rows.filter((row) => row.roles.includes(role)));
   },
 };
 
