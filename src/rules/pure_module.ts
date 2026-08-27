@@ -1,6 +1,6 @@
 // @light-fp adapter -- a lint rule adapts Deno's visitor API: it reports through a
 // void callback and is driven by mutation it does not own.
-import { isDomain } from "../layer.ts";
+import { layerOf } from "../layer.ts";
 
 const FUNCTION_SCOPES = new Set([
   "FunctionDeclaration",
@@ -20,11 +20,12 @@ const CONTROL_FLOW: Readonly<Record<string, string>> = {
   SwitchStatement: "a switch",
   TryStatement: "a try block",
   LabeledStatement: "a labeled statement",
+  BlockStatement: "a bare block",
 };
 
 export const pureModule: Deno.lint.Rule = {
   create(context) {
-    if (!isDomain(context.filename, context.sourceCode)) return {};
+    if (layerOf(context.filename, context.sourceCode) === "adapter") return {};
 
     // Module scope means no enclosing function. Testing the direct parent for
     // `Program` never works for an expression: a top-level `await` sits inside a
@@ -62,6 +63,24 @@ export const pureModule: Deno.lint.Rule = {
       );
     };
 
+    const runsOnImport = (node: Deno.lint.Node) => {
+      if (!atModuleScope(node)) return;
+      const coveredByAncestor = context.sourceCode
+        .getAncestors(node)
+        .some((ancestor) =>
+          ancestor.type === "ExpressionStatement" ||
+          ancestor.type === "AwaitExpression" ||
+          ancestor.type === "CallExpression" ||
+          CONTROL_FLOW[ancestor.type] !== undefined
+        );
+      if (coveredByAncestor) return;
+      context.report({
+        node,
+        message: "A module-level expression runs when the module is imported.",
+        hint: "Return it from a function and call that function from main.ts.",
+      });
+    };
+
     return {
       VariableDeclaration(node) {
         if (node.kind === "const") return;
@@ -91,6 +110,9 @@ export const pureModule: Deno.lint.Rule = {
         });
       },
 
+      CallExpression: runsOnImport,
+      TaggedTemplateExpression: runsOnImport,
+
       IfStatement: controlFlow,
       ForStatement: controlFlow,
       ForOfStatement: controlFlow,
@@ -100,6 +122,7 @@ export const pureModule: Deno.lint.Rule = {
       SwitchStatement: controlFlow,
       TryStatement: controlFlow,
       LabeledStatement: controlFlow,
+      BlockStatement: controlFlow,
     };
   },
 };

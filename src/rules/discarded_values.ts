@@ -1,6 +1,6 @@
 // @light-fp adapter -- a lint rule adapts Deno's visitor API: it reports through a
 // void callback and is driven by mutation it does not own.
-import { isDomain } from "../layer.ts";
+import { layerOf } from "../layer.ts";
 
 const FUNCTION_SCOPES = new Set([
   "FunctionDeclaration",
@@ -16,6 +16,21 @@ const DISCARDED: Readonly<Record<string, string>> = {
     "The value this tagged template produces is discarded.",
 };
 
+const discardedMessage = (node: Deno.lint.Node): string | undefined => {
+  if (node.type === "ChainExpression") return discardedMessage(node.expression);
+  if (node.type === "SequenceExpression") {
+    for (const expression of node.expressions) {
+      const message = discardedMessage(expression);
+      if (message) return message;
+    }
+    return undefined;
+  }
+  if (node.type === "CallExpression" && node.callee.type === "Super") {
+    return undefined;
+  }
+  return DISCARDED[node.type];
+};
+
 /**
  * The unhandled-Result rule, made decidable by asking a syntactic question.
  *
@@ -26,7 +41,7 @@ const DISCARDED: Readonly<Record<string, string>> = {
  */
 export const noDiscardedValues: Deno.lint.Rule = {
   create(context) {
-    if (!isDomain(context.filename, context.sourceCode)) return {};
+    if (layerOf(context.filename, context.sourceCode) === "adapter") return {};
 
     return {
       ExpressionStatement(node) {
@@ -53,7 +68,7 @@ export const noDiscardedValues: Deno.lint.Rule = {
         }
 
         // A directive prologue such as "use strict" is a string, not a value.
-        const message = DISCARDED[expression.type];
+        const message = discardedMessage(expression);
         if (!message) return;
 
         context.report({
