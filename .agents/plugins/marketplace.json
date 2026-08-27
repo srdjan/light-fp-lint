@@ -1,0 +1,20 @@
+{
+  "name": "light-fp-local",
+  "interface": {
+    "displayName": "Light FP Local"
+  },
+  "plugins": [
+    {
+      "name": "light-fp",
+      "source": {
+        "source": "local",
+        "path": "./"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

@@ -181,6 +181,19 @@ holds as domain code with no exemption. That the gate can be turned on its own
 implementation, and that the part which should pass does pass, is the only
 evidence worth having that the rules are livable.
 
+## Why are local, CI, and agent enforcement separate?
+
+They solve different problems. The local Git hook runs `deno lint` against the
+working tree for fast developer feedback, but `--no-verify` can bypass it. CI
+checks the committed repository and owns enforcement. The Codex skill carries
+reasoning guidance for edits, while the Codex Stop hook invokes the configured
+repository's same linter before an agent stops.
+
+Putting Git or agent behavior inside lint rules would mix workflow effects into
+the rule engine and create a second authority. Keeping the layers separate lets
+each remain small: rules diagnose code, hooks invoke the rules, the skill guides
+design, and CI decides whether a change can ship.
+
 ## What this cannot do
 
 Listed in the [README](README.md#limits), and worth repeating as a principle:

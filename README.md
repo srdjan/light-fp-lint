@@ -1,6 +1,6 @@
 # @light-fp/deno-lint-plugin
 
-[![Version](https://img.shields.io/badge/version-0.4.0-blue)](deno.json)
+[![Version](https://img.shields.io/badge/version-0.5.0-blue)](deno.json)
 [![JSR](https://img.shields.io/badge/jsr-@light--fp%2Fdeno--lint--plugin-black?logo=deno)](https://jsr.io/@light-fp/deno-lint-plugin)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
@@ -12,6 +12,9 @@ between domain and adapters.
 
 - [What the gate guarantees](#what-the-gate-guarantees)
 - [Quick start](#quick-start)
+- [Local pre-commit hook](#local-pre-commit-hook)
+- [Enforcement layers](#enforcement-layers)
+- [Agent integration](#agent-integration)
 - [Layers](#layers)
 - [Rules](#rules)
 - [Suppressing a rule](#suppressing-a-rule)
@@ -49,7 +52,7 @@ Add the plugin to `deno.json`:
 ```jsonc
 {
   "lint": {
-    "plugins": ["jsr:@light-fp/deno-lint-plugin"]
+    "plugins": ["jsr:@light-fp/deno-lint-plugin@^0.5.0"]
   }
 }
 ```
@@ -308,7 +311,7 @@ import plugin, {
   compare,
   explain,
   measure,
-} from "jsr:@light-fp/deno-lint-plugin";
+} from "jsr:@light-fp/deno-lint-plugin@^0.5.0";
 import baseline from "./lint-baseline.json" with { type: "json" };
 
 const count = (path: string, source: string) =>
@@ -330,6 +333,74 @@ editor than in CI.
 `measure` takes the counter as a parameter rather than calling `runPlugin`
 itself, so the comparison stays pure and the effect stays at the edge. See
 `tests/ratchet_test.ts` for the full version.
+
+## Local pre-commit hook
+
+Consumers need Deno 2.2 or newer. With Git 2.55 or newer, install the optional
+named hook from the versioned package export:
+
+```console
+$ deno run --allow-run=git jsr:@light-fp/deno-lint-plugin@0.5.0/hook install
+$ deno run --allow-run=git jsr:@light-fp/deno-lint-plugin@0.5.0/hook status
+$ git hook list --show-scope pre-commit
+```
+
+Remove only the configuration owned by this package:
+
+```console
+$ deno run --allow-run=git jsr:@light-fp/deno-lint-plugin@0.5.0/hook uninstall
+```
+
+The installer uses the local `hook.light-fp` namespace. It refuses conflicting
+or non-local values and leaves an existing traditional pre-commit hook intact.
+On older Git, add this command to the pre-commit system you already use:
+
+```console
+deno lint
+```
+
+Do not replace an existing hook file. The hook checks the working tree, not only
+the staged snapshot. It can be bypassed with `git commit --no-verify`, so it is
+fast feedback and never a substitute for required CI.
+
+## Enforcement layers
+
+| Layer           | Role                                             | Authority             |
+| --------------- | ------------------------------------------------ | --------------------- |
+| Lint package    | Implements the rules                             | Shared implementation |
+| Local Git hook  | Runs `deno lint` before a commit                 | Optional feedback     |
+| CI              | Runs the repository's complete check             | Required enforcement  |
+| Codex skill     | Teaches the Light FP editing workflow            | Optional guidance     |
+| Codex Stop hook | Runs the configured repository's own `deno lint` | Optional validation   |
+
+## Agent integration
+
+This checkout includes a local Codex plugin under `.codex-plugin/`, `skills/`,
+and `hooks/`. It is not published by this release. Add this checkout's local
+marketplace, install the plugin, and inspect the result:
+
+```console
+$ codex plugin marketplace add /absolute/path/to/light-fp-lint
+$ codex plugin add light-fp@light-fp-local
+$ codex plugin list
+```
+
+Remove the local installation and marketplace when testing is complete:
+
+```console
+$ codex plugin remove light-fp@light-fp-local
+$ codex plugin marketplace remove light-fp-local
+```
+
+Review `hooks/hooks.json` and `hooks/verify.ts` before enabling the plugin.
+Plugin hooks are untrusted local commands until the user reviews them. Use
+`/hooks` to complete that trust review, then start a new session. The skill
+guides edits without copying the lint rule catalog. The Stop hook activates only
+when the nearest Deno config uses this package, invokes that repository's own
+`deno lint`, and returns no source or raw diagnostics.
+
+The plugin is optional. CI remains required whether or not developers install
+the Git hook or agents enable the Codex integration.
 
 ## Limits
 
@@ -355,6 +426,16 @@ does not exist:
 ```console
 $ deno task ci   # fmt --check, check, lint, test
 ```
+
+CI requires Git 2.55 or newer and fails if the named-hook E2E tests would skip.
+If the qualifying Git executable is not first on `PATH`, select it explicitly:
+
+```console
+$ LIGHT_FP_TEST_GIT=/absolute/path/to/git deno task ci
+```
+
+For local iteration, `deno task test` remains portable. It may skip only the Git
+2.55-specific E2E tests when a qualifying Git executable is unavailable.
 
 Individually:
 
