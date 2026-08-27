@@ -1,11 +1,12 @@
 // @light-fp adapter -- a lint rule adapts Deno's visitor API: it reports through a
 // void callback and is driven by mutation it does not own.
-import { isDomain } from "../layer.ts";
+import { layerOf } from "../layer.ts";
 
 const isFunctionMember = (member: Deno.lint.Node): boolean => {
   if (
     member.type === "TSMethodSignature" ||
-    member.type === "TSCallSignatureDeclaration"
+    member.type === "TSCallSignatureDeclaration" ||
+    member.type === "TSConstructSignatureDeclaration"
   ) return true;
   if (member.type !== "TSPropertySignature") return false;
   return member.typeAnnotation?.typeAnnotation.type === "TSFunctionType";
@@ -18,10 +19,17 @@ const isFunctionMember = (member: Deno.lint.Node): boolean => {
  */
 export const preferTypeForData: Deno.lint.Rule = {
   create(context) {
-    if (!isDomain(context.filename, context.sourceCode)) return {};
+    if (layerOf(context.filename, context.sourceCode) === "adapter") return {};
 
     return {
       TSInterfaceDeclaration(node) {
+        if (
+          node.declare ||
+          context.sourceCode.getAncestors(node).some((ancestor) =>
+            ancestor.type === "TSModuleDeclaration"
+          )
+        ) return;
+
         const members = node.body.body;
         if (members.length === 0) return;
         if (members.every(isFunctionMember)) return;
@@ -46,8 +54,7 @@ export const preferTypeForData: Deno.lint.Rule = {
             "Interfaces here describe capability ports; data is a `type` so it composes into unions.",
           fix: (fixer) => {
             const text = context.sourceCode.getText(node);
-            const opening = text.indexOf("{");
-            if (opening === -1) return [];
+            const opening = node.body.range[0] - node.range[0];
             // `interface Name<T> {` becomes `type Name<T> = {`, and the
             // declaration gains the trailing semicolon a type alias needs.
             const head = text.slice(0, opening).replace(

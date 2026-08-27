@@ -1,8 +1,8 @@
 // @light-fp adapter -- a lint rule adapts Deno's visitor API: it reports through a
 // void callback and is driven by mutation it does not own.
-import { isDomain, isPrelude } from "../layer.ts";
+import { isDomain } from "../layer.ts";
 
-const SUPPRESSIONS = /@ts-(ignore|expect-error|nocheck)/;
+const SUPPRESSIONS = /^\s*@ts-(ignore|expect-error|nocheck)\b/;
 
 const CAST_HINT =
   "Use `satisfies`, narrow with a type guard, or move the cast into the smart constructor beside the type it creates.";
@@ -38,9 +38,6 @@ const isConstAssertion = (typeNode: Deno.lint.Node): boolean =>
 export const noUnsafeCast: Deno.lint.Rule = {
   create(context) {
     if (!isDomain(context.filename, context.sourceCode)) return {};
-    // The prelude builds the branded types everything else consumes, so it is the
-    // one place a cast is the point rather than an escape.
-    if (isPrelude(context.filename, context.sourceCode)) return {};
 
     const local = localTypeNames(context.sourceCode.ast);
 

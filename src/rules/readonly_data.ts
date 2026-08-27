@@ -1,6 +1,6 @@
 // @light-fp adapter -- a lint rule adapts Deno's visitor API: it reports through a
 // void callback and is driven by mutation it does not own.
-import { isDomain } from "../layer.ts";
+import { layerOf } from "../layer.ts";
 
 const DATA_DECLARATIONS = new Set([
   "TSTypeAliasDeclaration",
@@ -8,6 +8,7 @@ const DATA_DECLARATIONS = new Set([
 ]);
 
 const MUTABLE_COLLECTIONS: Readonly<Record<string, string>> = {
+  Array: "ReadonlyArray",
   Map: "ReadonlyMap",
   Set: "ReadonlySet",
 };
@@ -21,25 +22,47 @@ const MUTABLE_COLLECTIONS: Readonly<Record<string, string>> = {
  */
 export const readonlyData: Deno.lint.Rule = {
   create(context) {
-    if (!isDomain(context.filename, context.sourceCode)) return {};
+    if (layerOf(context.filename, context.sourceCode) === "adapter") return {};
 
     const inDataPosition = (node: Deno.lint.Node): boolean =>
       context.sourceCode.getAncestors(node).some((ancestor) =>
         DATA_DECLARATIONS.has(ancestor.type)
       );
 
+    const inAmbientContext = (node: Deno.lint.Node): boolean =>
+      context.sourceCode.getAncestors(node).some((ancestor) =>
+        ancestor.type === "TSModuleDeclaration" ||
+        (ancestor.type === "TSInterfaceDeclaration" && ancestor.declare)
+      );
+
+    const parentOf = (node: Deno.lint.Node): Deno.lint.Node | undefined =>
+      context.sourceCode.getAncestors(node).at(-1);
+
+    const readonlyArrayText = (node: Deno.lint.Node): string => {
+      if (node.type !== "TSArrayType") return context.sourceCode.getText(node);
+      const element = node.elementType;
+      const elementText = element.type === "TSArrayType"
+        ? `(${readonlyArrayText(element)})`
+        : context.sourceCode.getText(element);
+      return `readonly ${elementText}[]`;
+    };
+
     return {
       TSPropertySignature(node) {
+        if (inAmbientContext(node)) return;
+        if (!inDataPosition(node)) return;
         if (node.readonly) return;
         context.report({
           node: node.key,
           message: "Data properties are readonly.",
           hint: "Rebuild the value with a spread instead of assigning to it.",
-          fix: (fixer) => fixer.insertTextBefore(node.key, "readonly "),
+          fix: (fixer) => fixer.insertTextBefore(node, "readonly "),
         });
       },
 
       TSIndexSignature(node) {
+        if (inAmbientContext(node)) return;
+        if (!inDataPosition(node)) return;
         if (node.readonly) return;
         context.report({
           node,
@@ -50,8 +73,9 @@ export const readonlyData: Deno.lint.Rule = {
       },
 
       TSArrayType(node) {
+        if (inAmbientContext(node)) return;
         if (!inDataPosition(node)) return;
-        const parent = context.sourceCode.getAncestors(node).at(-1);
+        const parent = parentOf(node);
         // `readonly T[]` parses as a readonly type operator wrapping the array.
         if (
           parent && parent.type === "TSTypeOperator" &&
@@ -61,11 +85,17 @@ export const readonlyData: Deno.lint.Rule = {
           node,
           message: "Arrays in data types are readonly.",
           hint: "Write `readonly T[]`, and build new arrays with a spread.",
-          fix: (fixer) => fixer.insertTextBefore(node, "readonly "),
+          fix: parent?.type === "TSArrayType"
+            ? undefined
+            : (fixer) =>
+              node.elementType.type === "TSArrayType"
+                ? fixer.replaceText(node, readonlyArrayText(node))
+                : fixer.insertTextBefore(node, "readonly "),
         });
       },
 
       TSTypeReference(node) {
+        if (inAmbientContext(node)) return;
         if (node.typeName.type !== "Identifier") return;
         const replacement = MUTABLE_COLLECTIONS[node.typeName.name];
         if (!replacement) return;

@@ -1,22 +1,27 @@
 // @light-fp adapter -- a lint rule adapts Deno's visitor API: it reports through a
 // void callback and is driven by mutation it does not own.
-import { isDomain } from "../layer.ts";
+import { layerOf } from "../layer.ts";
 
 const MODEL_HINT =
   "Model data as a `type`, behavior as functions, and variants as a tagged union.";
 
 export const noOo: Deno.lint.Rule = {
   create(context) {
-    if (!isDomain(context.filename, context.sourceCode)) return {};
+    if (layerOf(context.filename, context.sourceCode) === "adapter") return {};
 
     const report = (node: Deno.lint.Node, message: string, hint = MODEL_HINT) =>
       context.report({ node, message, hint });
 
-    const reportClass = (node: Deno.lint.Node) =>
+    const reportClass = (node: Deno.lint.Node) => {
+      if (
+        node.type === "ClassDeclaration" &&
+        /^declare\b/.test(context.sourceCode.getText(node))
+      ) return;
       report(
         node,
         "Classes bundle data with behavior, which the domain keeps apart.",
       );
+    };
 
     return {
       ClassDeclaration: reportClass,
