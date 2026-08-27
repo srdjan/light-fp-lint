@@ -1,8 +1,14 @@
 // @light-fp adapter -- a lint rule adapts Deno's visitor API: it reports through a
 // void callback and is driven by mutation it does not own.
-import { isDomain, readPragma, toPosix } from "../layer.ts";
+import { layerOf, readPragma, toPosix } from "../layer.ts";
 
-const ADAPTER_SEGMENTS = new Set(["adapters", "adapter"]);
+const ADAPTER_SEGMENTS = new Set([
+  "adapters",
+  "adapter",
+  "infra",
+  "scripts",
+  "bin",
+]);
 
 const stripExtension = (specifier: string): string =>
   specifier.replace(/\.(ts|tsx|js|jsx|mjs|cjs)$/, "");
@@ -25,7 +31,8 @@ export const layerBoundary: Deno.lint.Rule = {
     // This rule runs everywhere, because reporting a malformed pragma is its job
     // too and a malformed pragma leaves the file in the fail-closed domain layer.
     const pragma = readPragma(context.sourceCode);
-    const domain = isDomain(context.filename, context.sourceCode);
+    const checksBoundary = layerOf(context.filename, context.sourceCode) !==
+      "adapter";
 
     const checkSource = (node: Deno.lint.Node | null | undefined) => {
       if (!node || node.type !== "Literal" || typeof node.value !== "string") {
@@ -52,7 +59,7 @@ export const layerBoundary: Deno.lint.Rule = {
       },
 
       ImportDeclaration(node) {
-        if (!domain) return;
+        if (!checksBoundary) return;
         checkSource(node.source);
         // A side-effect-only import runs the module for what it does, not for
         // what it exports, which is the one import form that is itself an effect.
@@ -67,17 +74,17 @@ export const layerBoundary: Deno.lint.Rule = {
       },
 
       ExportNamedDeclaration(node) {
-        if (!domain) return;
+        if (!checksBoundary) return;
         checkSource(node.source);
       },
 
       ExportAllDeclaration(node) {
-        if (!domain) return;
+        if (!checksBoundary) return;
         checkSource(node.source);
       },
 
       ImportExpression(node) {
-        if (!domain) return;
+        if (!checksBoundary) return;
         context.report({
           node,
           message: "Dynamic import is an effect, whatever it targets.",
