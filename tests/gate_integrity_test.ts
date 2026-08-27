@@ -69,6 +69,8 @@ Deno.test("gate integrity: an invalid pragma stays strict on an adapter path", (
       "light-fp/layer-boundary",
       "light-fp/no-ambient-effects",
       "light-fp/no-oo",
+      // The initializer call runs at import; pure-module owns that.
+      "light-fp/pure-module",
     ],
   );
 });

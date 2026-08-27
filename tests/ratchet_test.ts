@@ -27,18 +27,22 @@ const read = async (
   return out.toSorted((a, b) => a[0].localeCompare(b[0]));
 };
 
-Deno.test("ratchet: this repository holds at zero", async () => {
+// The plugin's own baseline. runPlugin ignores deno-lint-ignore, so a signed
+// suppression still counts here: a suppression is debt, and debt must not pay
+// itself down. src/layer.ts carries two, for the one cwd read the gate cannot
+// avoid, so the honest baseline is that pair rather than zero.
+const SRC_BASELINE: Readonly<Record<string, number>> = { "src/layer.ts": 2 };
+
+Deno.test("ratchet: this repository holds at its committed baseline", async () => {
   const current = measure(count, await read("src"));
   const entries = Object.entries(current);
   assert(entries.length > 0, "the walk found no files; nothing was measured");
 
-  // runPlugin ignores deno-lint-ignore, so suppressed violations deliberately
-  // count toward the baseline as debt.
-  const offenders = entries.filter(([, count]) => count > 0);
+  const offenders = Object.fromEntries(entries.filter(([, n]) => n > 0));
   assertEquals(
     offenders,
-    [],
-    "src/ carries unsuppressed or suppressed violations counted by the ratchet",
+    SRC_BASELINE,
+    "src/ diverged from its baseline: a new violation, or debt paid down without tightening SRC_BASELINE",
   );
 });
 
@@ -104,7 +108,9 @@ Deno.test("ratchet: measure counts real diagnostics", () => {
     ["src/domain/b.ts", `export const f = () => 1;`],
     ["src/adapters/c.ts", `export const now = Date.now();`],
   ]);
-  assertEquals(counted["src/domain/a.ts"], 1);
+  // Two: pure-module for the call in a module-scope initializer, and
+  // no-ambient-effects for the clock read.
+  assertEquals(counted["src/domain/a.ts"], 2);
   assertEquals(counted["src/domain/b.ts"], 0);
   assertEquals(counted["src/adapters/c.ts"], 0);
 });

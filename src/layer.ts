@@ -36,24 +36,24 @@ const LINTABLE_EXTENSIONS = [
   "cjs",
 ];
 
-const TEST_SUFFIXES = ["_test", ".test", "_bench", ".bench"].flatMap(
-  (marker) => LINTABLE_EXTENSIONS.map((extension) => `${marker}.${extension}`),
-);
+const TEST_MARKERS = ["_test", ".test", "_bench", ".bench"];
 
 export const toPosix = (filename: string): string =>
   filename.replaceAll("\\", "/");
 
+// Read per call, not once at module load. The editor's language server outlives
+// any single project, so a root captured at import time goes stale the moment it
+// serves a second workspace, and every file then resolves against the wrong root.
+// This is the same staleness that rules out reading configuration from disk.
 const currentRoot = (): string | undefined => {
   // deno-lint-ignore light-fp/no-throw -- Root discovery must tolerate hosts that deny cwd access.
   try {
-    // deno-lint-ignore light-fp/no-ambient-effects -- Reading cwd once anchors absolute lint paths to the workspace.
+    // deno-lint-ignore light-fp/no-ambient-effects -- The workspace root is what anchors an absolute lint path.
     return toPosix(Deno.cwd());
   } catch {
     return undefined;
   }
 };
-
-const ROOT = currentRoot();
 
 export const pathWithinRoot = (
   filename: string,
@@ -68,11 +68,17 @@ export const pathWithinRoot = (
 };
 
 const segmentsOf = (filename: string): readonly string[] =>
-  pathWithinRoot(filename, ROOT).split("/").filter(Boolean);
+  pathWithinRoot(filename, currentRoot()).split("/").filter(Boolean);
 
+// Split the name at its extension rather than precomputing every marker and
+// extension pair. Two literal arrays and no work at import time.
 export const isTestFile = (filename: string): boolean => {
   const posix = toPosix(filename);
-  return TEST_SUFFIXES.some((suffix) => posix.endsWith(suffix));
+  const dot = posix.lastIndexOf(".");
+  if (dot === -1) return false;
+  if (!LINTABLE_EXTENSIONS.includes(posix.slice(dot + 1))) return false;
+  const stem = posix.slice(0, dot);
+  return TEST_MARKERS.some((marker) => stem.endsWith(marker));
 };
 
 /** The pragma token found before the first statement, valid or not. */
