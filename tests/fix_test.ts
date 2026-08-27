@@ -1,7 +1,11 @@
 import { assertEquals } from "@std/assert";
 import { diagnose, DOMAIN } from "./harness.ts";
 
-type FixEdit = NonNullable<Deno.lint.Diagnostic["fix"]>[number];
+type FixEdit = ReturnType<Deno.lint.Fixer["replaceTextRange"]>;
+
+const isFixArray = (
+  value: FixEdit | readonly FixEdit[],
+): value is readonly FixEdit[] => Array.isArray(value);
 
 const FIX_PASS_CAP = 10;
 
@@ -33,11 +37,19 @@ const applyEdits = (source: string, edits: readonly FixEdit[]): string =>
       source,
     );
 
+const editsFor = (
+  diagnostic: Deno.lint.Diagnostic,
+): readonly FixEdit[] => {
+  const fix: FixEdit | readonly FixEdit[] | undefined = diagnostic.fix;
+  if (!fix) return [];
+  return isFixArray(fix) ? fix : [fix];
+};
+
 /** Match the CLI: apply a non-overlapping set, lint again, and stop at a cap. */
 const applyFixes = (source: string, filename = DOMAIN): string => {
   const applyPass = (current: string, passesRemaining: number): string => {
     const edits = nonOverlappingEdits(
-      diagnose(current, filename).flatMap((diagnostic) => diagnostic.fix ?? []),
+      diagnose(current, filename).flatMap(editsFor),
     );
     if (edits.length === 0) return current;
     if (passesRemaining === 0) {
@@ -54,8 +66,8 @@ const assertFix = (name: string, before: string, after: string) => {
   Deno.test(`fix: ${name}`, () => {
     const fixed = applyFixes(before);
     assertEquals(fixed, after);
-    const remaining = diagnose(fixed, DOMAIN).filter((d) =>
-      d.fix && d.fix.length > 0
+    const remaining = diagnose(fixed, DOMAIN).filter((diagnostic) =>
+      editsFor(diagnostic).length > 0
     );
     assertEquals(
       remaining.map((d) => d.id),
@@ -103,7 +115,7 @@ Deno.test("fix: only the outer nested array owns the replacement", () => {
   );
   const start = source.indexOf("number");
   assertEquals(diagnostics.length, 2);
-  assertEquals(diagnostics.flatMap((diagnostic) => diagnostic.fix ?? []), [
+  assertEquals(diagnostics.flatMap(editsFor), [
     {
       range: [start, start + "number[][]".length],
       text: "readonly (readonly number[])[]",

@@ -9,26 +9,29 @@ const FUNCTION_SCOPES = new Set([
   "MethodDefinition",
 ]);
 
-const DISCARDED: Readonly<Record<string, string>> = {
-  CallExpression: "The value this call returns is discarded.",
-  AwaitExpression: "The value this await produces is discarded.",
-  TaggedTemplateExpression:
-    "The value this tagged template produces is discarded.",
-};
+const isAllowedStatementExpression = (node: Deno.lint.Node): boolean =>
+  node.type === "AssignmentExpression" ||
+  node.type === "UpdateExpression" ||
+  node.type === "YieldExpression" ||
+  (node.type === "CallExpression" && node.callee.type === "Super");
 
-const discardedMessage = (node: Deno.lint.Node): string | undefined => {
-  if (node.type === "ChainExpression") return discardedMessage(node.expression);
-  if (node.type === "SequenceExpression") {
-    for (const expression of node.expressions) {
-      const message = discardedMessage(expression);
-      if (message) return message;
-    }
-    return undefined;
-  }
-  if (node.type === "CallExpression" && node.callee.type === "Super") {
-    return undefined;
-  }
-  return DISCARDED[node.type];
+const isDirective = (
+  node: Deno.lint.ExpressionStatement,
+  ancestors: readonly Deno.lint.Node[],
+): boolean => {
+  if (node.expression.type !== "Literal") return false;
+  if (typeof node.expression.value !== "string") return false;
+  const block = ancestors.at(-1);
+  const owner = ancestors.at(-2);
+  if (!block || block.type !== "BlockStatement" || !owner) return false;
+  if (!FUNCTION_SCOPES.has(owner.type)) return false;
+  const position = block.body.indexOf(node);
+  return position >= 0 &&
+    block.body.slice(0, position + 1).every((statement) =>
+      statement.type === "ExpressionStatement" &&
+      statement.expression.type === "Literal" &&
+      typeof statement.expression.value === "string"
+    );
 };
 
 /**
@@ -46,9 +49,10 @@ export const noDiscardedValues: Deno.lint.Rule = {
     return {
       ExpressionStatement(node) {
         // Module scope is pure-module's territory; this rule owns function bodies.
-        const insideFunction = context.sourceCode
-          .getAncestors(node)
-          .some((ancestor) => FUNCTION_SCOPES.has(ancestor.type));
+        const ancestors = context.sourceCode.getAncestors(node);
+        const insideFunction = ancestors.some((ancestor) =>
+          FUNCTION_SCOPES.has(ancestor.type)
+        );
         if (!insideFunction) return;
 
         const expression = node.expression;
@@ -67,13 +71,16 @@ export const noDiscardedValues: Deno.lint.Rule = {
           return;
         }
 
-        // A directive prologue such as "use strict" is a string, not a value.
-        const message = discardedMessage(expression);
-        if (!message) return;
+        // Assignments and updates exist for their state transition. A directive
+        // prologue is metadata, yield advances a generator, and super() is a
+        // required constructor transition. Every other expression makes a value
+        // and then silently loses it.
+        if (isAllowedStatementExpression(expression)) return;
+        if (isDirective(node, ancestors)) return;
 
         context.report({
           node,
-          message,
+          message: "The value this expression produces is discarded.",
           hint:
             "Assign it, return it, or match on its _tag. If nothing needs the value, the call does not belong in domain code.",
         });

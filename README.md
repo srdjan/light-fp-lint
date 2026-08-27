@@ -1,7 +1,7 @@
-# @light-fp/deno-lint-plugin
+# @srdjan/light-fp-lint
 
-[![Version](https://img.shields.io/badge/version-0.5.0-blue)](deno.json)
-[![JSR](https://img.shields.io/badge/jsr-@light--fp%2Fdeno--lint--plugin-black?logo=deno)](https://jsr.io/@light-fp/deno-lint-plugin)
+[![Version](https://img.shields.io/badge/version-0.6.0-blue)](deno.json)
+[![JSR](https://img.shields.io/badge/jsr-@srdjan%2Flight--fp--lint-black?logo=deno)](https://jsr.io/@srdjan/light-fp-lint)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 A Deno lint plugin that enforces Light Functional Programming in TypeScript:
@@ -52,7 +52,7 @@ Add the plugin to `deno.json`:
 ```jsonc
 {
   "lint": {
-    "plugins": ["jsr:@light-fp/deno-lint-plugin@^0.5.0"]
+    "plugins": ["jsr:@srdjan/light-fp-lint@^0.6.0"]
   }
 }
 ```
@@ -110,8 +110,9 @@ A file's layer is resolved in this order:
    unrecognised token is reported, and the file stays in the strict layer.
 2. **Test files.** A name ending `_test.ts`, `.test.ts`, `_bench.ts`, or
    `.bench.ts` is an adapter. Tests wire fakes and throw assertions.
-3. **Path.** A directory segment named `adapters`, `adapter`, `infra`,
-   `scripts`, or `bin`, or a basename of `main.ts`, is an adapter.
+3. **Path.** A directory segment or module basename named `adapters`, `adapter`,
+   `infra`, `scripts`, or `bin`, or a module basename named `main`, is an
+   adapter. This applies to every supported TypeScript and JavaScript extension.
 4. **Everything else is domain.**
 
 Step 4 fails closed on purpose. A gate that failed open would disappear the
@@ -142,8 +143,9 @@ brands, which legitimately needs `try/catch` and a brand-creating cast.
 
 Domain code names no adapter, in any import form: plain imports, re-exports,
 `export *`, dynamic `import()`, and side-effect-only imports. Matching is on
-path segments, so `../adapters/http.ts` and the sibling `../adapters.ts` both
-count, while an npm package called `my-adapters-helper` does not.
+path segments and module basenames, so `../adapters/http.ts`, `../adapters.ts`,
+and `../main.ts?worker` all count, while an npm package called
+`my-adapters-helper` does not.
 
 ```ts
 import { fetchUser } from "../adapters/http.ts"; // reported
@@ -153,11 +155,12 @@ import type { HttpPort } from "../ports/http.ts"; // fine
 ### `light-fp/pure-module`
 
 Importing a domain module runs nothing. Reports module-level `let` and `var`,
-bare call statements, top-level `await`, and top-level control flow. Anything
-inside a function body is fine, including `let`.
+top-level `await` and control flow, and calls, construction, or tagged templates
+that execute at module scope, including inside exported initializers. Anything
+inside a function body is fine, including `let` and deterministic construction.
 
 ```ts
-let cache = new Map(); // reported
+export const cache = new Map(); // reported: construction runs on import
 main(); // reported
 export const makeCache = () => new Map(); // fine
 ```
@@ -194,11 +197,14 @@ if (!valid) return err({ _tag: "Invalid", reason }); // fine
 
 ### `light-fp/no-discarded-values`
 
-Every expression's value is used. This is the unhandled-`Result` check. Asking
-"is this a `Result`?" needs type information the linter does not have; asking
-"is a value being thrown away?" does not, and inside a pure function the two are
-the same question. It catches ignored `Result` values, floating promises, and
-fire-and-forget effects at once.
+Every expression statement inside a function must be a state transition such as
+an assignment, update, or generator `yield`. Values produced by calls,
+construction, logical and conditional expressions, optional chains, sequences,
+and tagged templates cannot be silently discarded. This is the
+unhandled-`Result` check. Asking "is this a `Result`?" needs type information
+the linter does not have; asking "is a value being thrown away?" does not, and
+inside a pure function the two are the same question. It catches ignored
+`Result` values, floating promises, and fire-and-forget effects at once.
 
 ```ts
 validateUser(input); // reported
@@ -225,9 +231,11 @@ type ADT =
   | { readonly _tag: "B" }; // fine
 ```
 
-Function parameter and return annotations are not reported. Requiring `readonly`
-on every parameter would be the noisiest rule in the set; this is a deliberate
-false-positive budget.
+Function parameter and return annotations are not reported, including method,
+function-property, call-signature, and constructor annotations nested inside a
+data declaration. Requiring `readonly` on every parameter would be the noisiest
+rule in the set; this is a deliberate false-positive budget. Ordinary data
+surrounding a callable member remains subject to the rule.
 
 ### `light-fp/no-oo`
 
@@ -311,7 +319,7 @@ import plugin, {
   compare,
   explain,
   measure,
-} from "jsr:@light-fp/deno-lint-plugin@^0.5.0";
+} from "jsr:@srdjan/light-fp-lint@^0.6.0";
 import baseline from "./lint-baseline.json" with { type: "json" };
 
 const count = (path: string, source: string) =>
@@ -340,15 +348,15 @@ Consumers need Deno 2.2 or newer. With Git 2.55 or newer, install the optional
 named hook from the versioned package export:
 
 ```console
-$ deno run --allow-run=git jsr:@light-fp/deno-lint-plugin@0.5.0/hook install
-$ deno run --allow-run=git jsr:@light-fp/deno-lint-plugin@0.5.0/hook status
+$ deno run --allow-run=git jsr:@srdjan/light-fp-lint@0.6.0/hook install
+$ deno run --allow-run=git jsr:@srdjan/light-fp-lint@0.6.0/hook status
 $ git hook list --show-scope pre-commit
 ```
 
 Remove only the configuration owned by this package:
 
 ```console
-$ deno run --allow-run=git jsr:@light-fp/deno-lint-plugin@0.5.0/hook uninstall
+$ deno run --allow-run=git jsr:@srdjan/light-fp-lint@0.6.0/hook uninstall
 ```
 
 The installer uses the local `hook.light-fp` namespace. It refuses conflicting
@@ -395,9 +403,11 @@ $ codex plugin marketplace remove light-fp-local
 Review `hooks/hooks.json` and `hooks/verify.ts` before enabling the plugin.
 Plugin hooks are untrusted local commands until the user reviews them. Use
 `/hooks` to complete that trust review, then start a new session. The skill
-guides edits without copying the lint rule catalog. The Stop hook activates only
-when the nearest Deno config uses this package, invokes that repository's own
-`deno lint`, and returns no source or raw diagnostics.
+guides edits without copying the lint rule catalog. The Stop hook asks Deno to
+load the nearest config's effective lint settings, so a workspace member
+inherits activation from its workspace root. When active, it invokes that
+member's own `deno lint` and returns no source, path, rule ID, or raw
+diagnostic.
 
 The plugin is optional. CI remains required whether or not developers install
 the Git hook or agents enable the Codex integration.
@@ -418,6 +428,10 @@ does not exist:
   switch over `_tag`, which is precisely what hides a missing variant.
 - **Mutation through an alias is not tracked.** `readonly-data` forces the
   annotations; `deno check` enforces them from there.
+- **Deno 2.2's programmatic lint helper cannot expose source text.** The real
+  `deno lint` command supports every rule on Deno 2.2. Under exactly Deno 2.2,
+  `Deno.lint.runPlugin` cannot observe layer pragmas or suppression comments;
+  use the CLI for those checks or a newer Deno for programmatic comment rules.
 - **npm and node specifiers are not restricted.** A pure schema library in the
   domain is legitimate, and banning it would only breed suppressions.
 
@@ -450,10 +464,12 @@ The plugin lints its own source. `src/layer.ts` holds as domain code; the rule
 modules carry an adapter pragma, because a lint rule adapts an imperative
 visitor API and reports through a void callback.
 
-Tests use `Deno.lint.runPlugin`. `tests/rules_test.ts` is table-driven per rule
-and asserts exact diagnostic counts, so a rule that fires twice fails as loudly
-as one that never fires. `tests/fix_test.ts` asserts the exact text each fix
-produces and then typechecks it. `tests/examples_test.ts` pins the example
+The current-Deno suite uses `Deno.lint.runPlugin`. `tests/rules_test.ts` is
+table-driven per rule and asserts exact diagnostic counts, so a rule that fires
+twice fails as loudly as one that never fires. Deno 2.2 has a separate
+compatibility task that drives the real CLI across every plugin rule and runs
+the hook and package E2E suites. `tests/fix_test.ts` asserts the exact text each
+fix produces and then typechecks it. `tests/examples_test.ts` pins the example
 corpus, so the documentation cannot drift away from what the rules do.
 
 ## Further reading

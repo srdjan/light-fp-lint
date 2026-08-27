@@ -2,12 +2,17 @@ import { assertEquals } from "@std/assert";
 import { fromFileUrl, join } from "@std/path";
 
 const root = fromFileUrl(new URL("..", import.meta.url));
+const releaseVersion = "0.6.0";
 
 type PackageConfig = Readonly<{
   name: string;
   version: string;
   exports: Readonly<Record<string, string>>;
   publish: Readonly<{ include: readonly string[] }>;
+  lint: Readonly<{
+    exclude: readonly string[];
+    plugins: readonly string[];
+  }>;
 }>;
 
 const readPackage = async (): Promise<PackageConfig> =>
@@ -16,8 +21,8 @@ const readPackage = async (): Promise<PackageConfig> =>
 Deno.test("package: deno.json is the single package authority", async () => {
   const config = await readPackage();
 
-  assertEquals(config.name, "@light-fp/deno-lint-plugin");
-  assertEquals(config.version, "0.5.0");
+  assertEquals(config.name, "@srdjan/light-fp-lint");
+  assertEquals(config.version, releaseVersion);
   assertEquals(config.exports, {
     ".": "./src/mod.ts",
     "./hook": "./src/cli/hook.ts",
@@ -28,6 +33,8 @@ Deno.test("package: deno.json is the single package authority", async () => {
     "LICENSE",
     "deno.json",
   ]);
+  assertEquals(config.lint.plugins, ["./src/mod.ts"]);
+  assertEquals(config.lint.exclude.includes("hooks/activation_probe.ts"), true);
 
   const jsrConfig = await Deno.stat(join(root, "jsr.json")).then(
     () => "Present" as const,
@@ -57,10 +64,11 @@ Deno.test("package: repository-only paths stay outside the publish set", async (
 });
 
 Deno.test("package: Codex plugin manifest references the root bundle", async () => {
+  const config = await readPackage();
   const manifestPath = join(root, ".codex-plugin", "plugin.json");
   const manifest = JSON.parse(await Deno.readTextFile(manifestPath));
   assertEquals(manifest.name, "light-fp");
-  assertEquals(manifest.version, "0.5.0");
+  assertEquals(manifest.version, config.version);
   assertEquals(manifest.skills, "./skills/");
   assertEquals(manifest.hooks, "./hooks/hooks.json");
   assertEquals(Object.hasOwn(manifest, "mcpServers"), false);
@@ -71,7 +79,7 @@ Deno.test("package: Codex plugin manifest references the root bundle", async () 
   }
   const skill = await Deno.readTextFile(join(root, "skills/light-fp/SKILL.md"));
   assertEquals(skill.startsWith("---\nname: light-fp\n"), true);
-  assertEquals(skill.includes("@light-fp/deno-lint-plugin"), true);
+  assertEquals(skill.includes(config.name), true);
   assertEquals(skill.includes("Do not use for repositories"), true);
 
   const hooks = JSON.parse(
@@ -86,6 +94,19 @@ Deno.test("package: Codex plugin manifest references the root bundle", async () 
   assertEquals(
     stop.commandWindows,
     'deno run --quiet --allow-read --allow-run=deno "%PLUGIN_ROOT%/hooks/verify.ts"',
+  );
+});
+
+Deno.test("package: README install commands name this release", async () => {
+  const config = await readPackage();
+  const readme = await Deno.readTextFile(join(root, "README.md"));
+  assertEquals(
+    readme.includes(`jsr:${config.name}@^${config.version}`),
+    true,
+  );
+  assertEquals(
+    readme.includes(`jsr:${config.name}@${config.version}/hook install`),
+    true,
   );
 });
 

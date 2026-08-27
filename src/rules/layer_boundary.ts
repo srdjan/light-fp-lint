@@ -1,17 +1,6 @@
 // @light-fp adapter -- a lint rule adapts Deno's visitor API: it reports through a
 // void callback and is driven by mutation it does not own.
-import { layerOf, readPragma, toPosix } from "../layer.ts";
-
-const ADAPTER_SEGMENTS = new Set([
-  "adapters",
-  "adapter",
-  "infra",
-  "scripts",
-  "bin",
-]);
-
-const stripExtension = (specifier: string): string =>
-  specifier.replace(/\.(ts|tsx|js|jsx|mjs|cjs)$/, "");
+import { isAdapterPath, layerOf, readPragma } from "../layer.ts";
 
 /**
  * True when a specifier names an adapter. Segment matching, not substring
@@ -19,9 +8,8 @@ const stripExtension = (specifier: string): string =>
  * count, while a package called `my-adapters-helper` does not.
  */
 export const namesAdapter = (specifier: string): boolean =>
-  stripExtension(toPosix(specifier)).split("/").some((segment) =>
-    ADAPTER_SEGMENTS.has(segment)
-  );
+  !/^(?:data|https?|jsr|node|npm):/.test(specifier) &&
+  isAdapterPath(specifier, undefined);
 
 const isRelative = (specifier: string): boolean =>
   specifier.startsWith(".") || specifier.startsWith("/");

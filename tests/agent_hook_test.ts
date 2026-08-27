@@ -2,12 +2,13 @@ import { assertEquals, assertStringIncludes } from "@std/assert";
 import { delimiter } from "node:path";
 import { fromFileUrl, join } from "@std/path";
 import {
-  configUsesLightFp,
   type LintResult,
   parseStopInput,
+  type PluginDetection,
   type VerifyCapabilities,
   verifyStop,
 } from "../hooks/verify.ts";
+import lightFpPlugin from "../src/mod.ts";
 
 const root = fromFileUrl(new URL("..", import.meta.url));
 const verifyScript = join(root, "hooks", "verify.ts");
@@ -21,19 +22,29 @@ const stopInput = (cwd: string, active = false): string =>
   });
 
 const fakeCapabilities = (
-  files: Readonly<Record<string, string>>,
+  files: readonly string[],
   lint: LintResult = { _tag: "LintFinished", code: 0 },
+  detection: PluginDetection = { _tag: "Active" },
 ): Readonly<{
   capabilities: VerifyCapabilities;
+  detectionCalls: Array<Readonly<{ cwd: string; configPath: string }>>;
   lintDirectories: string[];
 }> => {
+  const discovered = new Set(files);
+  const detectionCalls: Array<
+    Readonly<{ cwd: string; configPath: string }>
+  > = [];
   const lintDirectories: string[] = [];
   return {
+    detectionCalls,
     lintDirectories,
     capabilities: {
       fileKind: (path) =>
-        Promise.resolve(Object.hasOwn(files, path) ? "File" : "Missing"),
-      readTextFile: (path) => Promise.resolve(files[path]),
+        Promise.resolve(discovered.has(path) ? "File" : "Missing"),
+      detectLightFp: (cwd, configPath) => {
+        detectionCalls.push({ cwd, configPath });
+        return Promise.resolve(detection);
+      },
       runLint: (cwd) => {
         lintDirectories.push(cwd);
         return Promise.resolve(lint);
@@ -45,25 +56,39 @@ const fakeCapabilities = (
 const writeLocalPluginFixture = async (
   directory: string,
   domainSource: string,
+  plugin: "Empty" | "LightFp" = "Empty",
+  excludedRules: readonly string[] = [],
 ): Promise<void> => {
-  const src = join(directory, "src");
-  await Deno.mkdir(src);
+  const pluginSpecifier = plugin === "LightFp"
+    ? new URL("../src/mod.ts", import.meta.url).href
+    : "./src/mod.ts";
   await Deno.writeTextFile(
     join(directory, "deno.json"),
-    '{"name":"@light-fp/deno-lint-plugin","lint":{"plugins":["./src/mod.ts"]}}',
+    JSON.stringify({
+      lint: {
+        plugins: [pluginSpecifier],
+        rules: { exclude: excludedRules },
+      },
+    }),
   );
-  await Deno.writeTextFile(
-    join(src, "mod.ts"),
-    'const plugin: Deno.lint.Plugin = { name: "fixture", rules: {} };\nexport default plugin;\n',
-  );
+  if (plugin === "Empty") {
+    const src = join(directory, "src");
+    await Deno.mkdir(src);
+    await Deno.writeTextFile(
+      join(src, "mod.ts"),
+      'const plugin: Deno.lint.Plugin = { name: "fixture", rules: {} };\nexport default plugin;\n',
+    );
+  }
   await Deno.writeTextFile(join(directory, "domain.ts"), domainSource);
 };
 
 const runVerifyScript = async (
   directory: string,
   options: Readonly<{
+    active?: boolean;
     cwd?: string;
     env?: Readonly<Record<string, string>>;
+    script?: string;
   }> = {},
 ) => {
   const child = new Deno.Command(Deno.execPath(), {
@@ -72,7 +97,7 @@ const runVerifyScript = async (
       "--quiet",
       "--allow-read",
       "--allow-run=deno",
-      verifyScript,
+      options.script ?? verifyScript,
     ],
     cwd: options.cwd,
     env: options.env,
@@ -81,7 +106,9 @@ const runVerifyScript = async (
     stderr: "piped",
   }).spawn();
   const writer = child.stdin.getWriter();
-  await writer.write(new TextEncoder().encode(stopInput(directory)));
+  await writer.write(
+    new TextEncoder().encode(stopInput(directory, options.active ?? false)),
+  );
   await writer.close();
   return await child.output();
 };
@@ -114,7 +141,7 @@ Deno.test("agent hook: validates the complete Stop input boundary", () => {
 });
 
 Deno.test("agent hook: malformed selected input fails closed without running lint", async () => {
-  const fake = fakeCapabilities({});
+  const fake = fakeCapabilities([]);
   const response = await verifyStop("not json", fake.capabilities);
   assertEquals(response, {
     continue: false,
@@ -124,73 +151,79 @@ Deno.test("agent hook: malformed selected input fails closed without running lin
 });
 
 Deno.test("agent hook: no config and unrelated config are no-ops", async () => {
-  const noConfig = fakeCapabilities({});
+  const noConfig = fakeCapabilities([]);
   assertEquals(
     await verifyStop(stopInput("/work/repo"), noConfig.capabilities),
     {},
   );
 
-  const unrelated = fakeCapabilities({
-    "/work/repo/deno.json": JSON.stringify({ lint: { plugins: ["other"] } }),
-  });
+  const unrelated = fakeCapabilities(
+    ["/work/repo/deno.json"],
+    undefined,
+    { _tag: "Inactive" },
+  );
   assertEquals(
     await verifyStop(stopInput("/work/repo"), unrelated.capabilities),
     {},
   );
   assertEquals(noConfig.lintDirectories, []);
   assertEquals(unrelated.lintDirectories, []);
-});
-
-Deno.test("agent hook: recognizes local and versioned Light FP config", () => {
-  assertEquals(
-    configUsesLightFp(`{
-      // Local development config.
-      "name": "@light-fp/deno-lint-plugin",
-      "lint": { "plugins": ["./src/mod.ts",], },
-    }`),
-    true,
-  );
-  assertEquals(
-    configUsesLightFp(JSON.stringify({
-      lint: { plugins: ["jsr:@light-fp/deno-lint-plugin@^0.5.0"] },
-    })),
-    true,
-  );
-  assertEquals(configUsesLightFp("not json"), false);
-  assertEquals(
-    configUsesLightFp('{"lint":{"plugins":["./src/mod.ts"]}}'),
-    false,
-  );
-  assertEquals(
-    configUsesLightFp(
-      '{"lint":{"plugins":["prefix@light-fp/deno-lint-plugin"]}}',
-    ),
-    false,
-  );
+  assertEquals(noConfig.detectionCalls, []);
+  assertEquals(unrelated.detectionCalls, [
+    { cwd: "/work/repo", configPath: "/work/repo/deno.json" },
+  ]);
 });
 
 Deno.test("agent hook: nearest configured parent runs lint from its directory", async () => {
-  const fake = fakeCapabilities({
-    "/work/repo/deno.jsonc": `{
-      "name": "@light-fp/deno-lint-plugin",
-      "lint": { "plugins": ["./src/mod.ts",], },
-    }`,
-  });
+  const fake = fakeCapabilities(["/work/repo/deno.jsonc"]);
   const response = await verifyStop(
     stopInput("/work/repo/src/domain"),
     fake.capabilities,
   );
   assertEquals(response, {});
+  assertEquals(fake.detectionCalls, [
+    { cwd: "/work/repo", configPath: "/work/repo/deno.jsonc" },
+  ]);
   assertEquals(fake.lintDirectories, ["/work/repo"]);
+});
+
+Deno.test("agent hook: effective configuration detection fails closed", async () => {
+  const fake = fakeCapabilities(
+    ["/work/repo/deno.json"],
+    undefined,
+    { _tag: "DetectionFailure" },
+  );
+  assertEquals(
+    await verifyStop(stopInput("/work/repo"), fake.capabilities),
+    {
+      continue: false,
+      stopReason:
+        "Light FP validation could not inspect the effective Deno lint configuration.",
+    },
+  );
+  assertEquals(fake.lintDirectories, []);
+});
+
+Deno.test("agent hook: rejected detection capability fails closed", async () => {
+  const fake = fakeCapabilities(["/work/repo/deno.json"]);
+  const response = await verifyStop(stopInput("/work/repo"), {
+    ...fake.capabilities,
+    detectLightFp: () => Promise.reject(new Error("secret detection detail")),
+  });
+  assertEquals(response, {
+    continue: false,
+    stopReason:
+      "Light FP validation could not inspect the effective Deno lint configuration.",
+  });
+  assertEquals(
+    JSON.stringify(response).includes("secret detection detail"),
+    false,
+  );
 });
 
 Deno.test("agent hook: first failure blocks with a redacted correction request", async () => {
   const fake = fakeCapabilities(
-    {
-      "/work/repo/deno.json": JSON.stringify({
-        lint: { plugins: ["jsr:@light-fp/deno-lint-plugin@0.5.0"] },
-      }),
-    },
+    ["/work/repo/deno.json"],
     { _tag: "LintFinished", code: 1 },
   );
   const response = await verifyStop(stopInput("/work/repo"), fake.capabilities);
@@ -203,10 +236,7 @@ Deno.test("agent hook: first failure blocks with a redacted correction request",
 
 Deno.test("agent hook: repeated failure stops instead of looping", async () => {
   const fake = fakeCapabilities(
-    {
-      "/work/repo/deno.json":
-        '{"name":"@light-fp/deno-lint-plugin","lint":{"plugins":["./src/mod.ts"]}}',
-    },
+    ["/work/repo/deno.json"],
     { _tag: "LintFinished", code: 1 },
   );
   const response = await verifyStop(
@@ -223,10 +253,7 @@ Deno.test("agent hook: repeated failure stops instead of looping", async () => {
 Deno.test("agent hook: paths with spaces and process failures stay redacted", async () => {
   const directory = "/work/project with spaces";
   const fake = fakeCapabilities(
-    {
-      [`${directory}/deno.json`]:
-        '{"name":"@light-fp/deno-lint-plugin","lint":{"plugins":["./src/mod.ts"]}}',
-    },
+    [`${directory}/deno.json`],
     { _tag: "LintProcessFailure" },
   );
   const response = await verifyStop(
@@ -243,10 +270,7 @@ Deno.test("agent hook: paths with spaces and process failures stay redacted", as
 });
 
 Deno.test("agent hook: rejected lint capability becomes a process failure", async () => {
-  const fake = fakeCapabilities({
-    "/work/repo/deno.json":
-      '{"name":"@light-fp/deno-lint-plugin","lint":{"plugins":["./src/mod.ts"]}}',
-  });
+  const fake = fakeCapabilities(["/work/repo/deno.json"]);
   const response = await verifyStop(stopInput("/work/repo"), {
     ...fake.capabilities,
     runLint: () => Promise.reject(new Error("secret process detail")),
@@ -272,7 +296,9 @@ Deno.test("agent hook: invokes the PATH-resolved deno granted by its permissions
       : join(bin, "deno");
     await Deno.writeTextFile(
       shim,
-      Deno.build.os === "windows" ? "@exit /b 0\r\n" : "#!/bin/sh\nexit 0\n",
+      Deno.build.os === "windows"
+        ? '@echo {"version":1,"diagnostics":[],"errors":[],"checked_files":[]}\r\n@exit /b 0\r\n'
+        : '#!/bin/sh\nprintf \'%s\\n\' \'{"version":1,"diagnostics":[],"errors":[],"checked_files":[]}\'\nexit 0\n',
       { mode: 0o755 },
     );
     await writeLocalPluginFixture(directory, "export const = 1;\n");
@@ -288,7 +314,7 @@ Deno.test("agent hook: invokes the PATH-resolved deno granted by its permissions
   }
 });
 
-Deno.test("agent hook: missing PATH deno reports a process failure", async () => {
+Deno.test("agent hook: missing PATH deno fails activation detection", async () => {
   const directory = await Deno.makeTempDir({
     prefix: "light fp missing deno ",
   });
@@ -306,7 +332,7 @@ Deno.test("agent hook: missing PATH deno reports a process failure", async () =>
       {
         continue: false,
         stopReason:
-          "Light FP validation could not start deno lint. Check that deno is available on PATH and allowed by the hook configuration.",
+          "Light FP validation could not inspect the effective Deno lint configuration.",
       },
     );
   } finally {
@@ -322,6 +348,162 @@ Deno.test("agent hook: real protocol works with the registered permissions", asy
     const output = await runVerifyScript(directory);
     assertEquals(output.code, 0, decoder.decode(output.stderr));
     assertEquals(decoder.decode(output.stdout), "{}");
+  } finally {
+    await Deno.remove(directory, { recursive: true });
+  }
+});
+
+Deno.test("agent hook: this checkout stays active with its probe excluded", async () => {
+  const directory = await Deno.makeTempDir({
+    dir: root,
+    prefix: "light-fp-own-hook-",
+  });
+  const sourceMarker = "OWN_BUNDLE_PROBE_MARKER_8021";
+  try {
+    await Deno.writeTextFile(
+      join(directory, "domain.ts"),
+      `export const run = () => { throw new Error("${sourceMarker}"); };\n`,
+    );
+    const output = await runVerifyScript(directory, { cwd: directory });
+    assertEquals(output.code, 0, decoder.decode(output.stderr));
+    assertEquals(decoder.decode(output.stderr), "");
+    assertEquals(JSON.parse(decoder.decode(output.stdout)), {
+      decision: "block",
+      reason:
+        "Light FP validation failed. Run deno lint, inspect the local diagnostics, and fix the design.",
+    });
+    assertEquals(decoder.decode(output.stdout).includes(sourceMarker), false);
+  } finally {
+    await Deno.remove(directory, { recursive: true });
+  }
+});
+
+Deno.test("agent hook: effective workspace config activates Light FP", async () => {
+  const directory = await Deno.makeTempDir({
+    prefix: "light fp workspace hook ",
+  });
+  try {
+    const member = join(directory, "member");
+    await Deno.mkdir(member);
+    const plugin = new URL("../src/mod.ts", import.meta.url).href;
+    await Deno.writeTextFile(
+      join(directory, "deno.json"),
+      JSON.stringify({
+        workspace: ["./member"],
+        lint: { plugins: [plugin] },
+      }),
+    );
+    await Deno.writeTextFile(
+      join(member, "deno.json"),
+      JSON.stringify({ name: "@fixture/member", version: "0.0.0" }),
+    );
+    await Deno.writeTextFile(
+      join(member, "domain.ts"),
+      'export const run = () => { throw new Error("workspace violation"); };\n',
+    );
+
+    const output = await runVerifyScript(member, { cwd: member });
+    assertEquals(output.code, 0, decoder.decode(output.stderr));
+    assertEquals(JSON.parse(decoder.decode(output.stdout)), {
+      decision: "block",
+      reason:
+        "Light FP validation failed. Run deno lint, inspect the local diagnostics, and fix the design.",
+    });
+  } finally {
+    await Deno.remove(directory, { recursive: true });
+  }
+});
+
+Deno.test("agent hook: any enabled Light FP rule proves activation", async () => {
+  const directory = await Deno.makeTempDir({
+    prefix: "light fp partial rule hook ",
+  });
+  try {
+    const consumer = join(directory, "consumer");
+    const copiedHooks = join(directory, "infra", "plugin", "hooks");
+    await Deno.mkdir(consumer);
+    await Deno.mkdir(copiedHooks, { recursive: true });
+    await Deno.copyFile(verifyScript, join(copiedHooks, "verify.ts"));
+    await Deno.copyFile(
+      join(root, "hooks", "activation_probe.ts"),
+      join(copiedHooks, "activation_probe.ts"),
+    );
+    const probe = await Deno.readTextFile(
+      join(root, "hooks", "activation_probe.ts"),
+    );
+    const rules = Object.keys(lightFpPlugin.rules).map((rule) =>
+      `light-fp/${rule}`
+    );
+    for (const activeRule of rules) {
+      await writeLocalPluginFixture(
+        consumer,
+        probe,
+        "LightFp",
+        rules.filter((rule) => rule !== activeRule),
+      );
+      const output = await runVerifyScript(consumer, {
+        script: join(copiedHooks, "verify.ts"),
+      });
+      assertEquals(output.code, 0, activeRule);
+      assertEquals(
+        JSON.parse(decoder.decode(output.stdout)),
+        {
+          decision: "block",
+          reason:
+            "Light FP validation failed. Run deno lint, inspect the local diagnostics, and fix the design.",
+        },
+        activeRule,
+      );
+    }
+  } finally {
+    await Deno.remove(directory, { recursive: true });
+  }
+});
+
+Deno.test("agent hook: real lint failures and retries stay fully redacted", async () => {
+  const directory = await Deno.makeTempDir({
+    prefix: "light fp secret path ",
+  });
+  const sourceMarker = "PRIVATE_SOURCE_MARKER_4179";
+  try {
+    await writeLocalPluginFixture(
+      directory,
+      `export const run = () => { throw new Error("${sourceMarker}"); };\n`,
+      "LightFp",
+    );
+
+    const first = await runVerifyScript(directory);
+    assertEquals(first.code, 0, decoder.decode(first.stderr));
+    assertEquals(decoder.decode(first.stderr), "");
+    assertEquals(JSON.parse(decoder.decode(first.stdout)), {
+      decision: "block",
+      reason:
+        "Light FP validation failed. Run deno lint, inspect the local diagnostics, and fix the design.",
+    });
+
+    const retry = await runVerifyScript(directory, { active: true });
+    assertEquals(retry.code, 0, decoder.decode(retry.stderr));
+    assertEquals(decoder.decode(retry.stderr), "");
+    assertEquals(JSON.parse(decoder.decode(retry.stdout)), {
+      continue: false,
+      stopReason:
+        "Light FP validation still fails after one correction attempt. Run deno lint and fix the design before continuing.",
+    });
+
+    for (const output of [first, retry]) {
+      const protocol = decoder.decode(output.stdout) +
+        decoder.decode(output.stderr);
+      for (
+        const secret of [
+          directory,
+          sourceMarker,
+          "light-fp/no-throw",
+          "Domain code reports failure",
+        ]
+      ) {
+        assertEquals(protocol.includes(secret), false, secret);
+      }
+    }
   } finally {
     await Deno.remove(directory, { recursive: true });
   }

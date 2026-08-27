@@ -20,6 +20,29 @@ Deno.test("readonly-data: inline annotations are outside the data policy", () =>
   assertEquals(diagnosticsFor("readonly-data", source).length, 0);
 });
 
+Deno.test("readonly-data: callable annotations stay outside the data policy", () => {
+  const declarations = [
+    `interface Port {
+      load(input: { id: string }): { value: string };
+    }`,
+    `interface Port {
+      load: (input: { id: string }) => { value: string };
+    }`,
+    `type Handler = (input: { id: string }) => { value: string };`,
+    `type Factory = new (input: { id: string }) => { value: string };`,
+    `interface Callable {
+      (input: { id: string }): { value: string };
+    }`,
+    `interface Factory {
+      new (input: { id: string }): { value: string };
+    }`,
+  ];
+
+  for (const source of declarations) {
+    assertEquals(diagnosticsFor("readonly-data", source).length, 0, source);
+  }
+});
+
 Deno.test("readonly-data: declarations apply the policy at every data node", () => {
   const source = `type Data = {
     xs: string[];

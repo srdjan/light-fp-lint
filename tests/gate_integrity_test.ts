@@ -49,6 +49,28 @@ Deno.test("gate integrity: infra imports cross the layer boundary", () => {
   );
 });
 
+Deno.test("gate integrity: every adapter path convention crosses the boundary", () => {
+  for (
+    const specifier of [
+      "../main.ts",
+      "../adapter.ts",
+      "../adapters/http.ts",
+      "../infra.ts?worker",
+      "../scripts/task.mts#entry",
+      "../bin/tool.cts",
+    ]
+  ) {
+    assertEquals(
+      diagnosticIds(
+        "/repo/src/domain/a.ts",
+        `import { effect } from "${specifier}";\n`,
+      ),
+      ["light-fp/layer-boundary"],
+      specifier,
+    );
+  }
+});
+
 Deno.test("gate integrity: prelude imports cannot cross into adapters", () => {
   assertEquals(
     diagnosticIds(

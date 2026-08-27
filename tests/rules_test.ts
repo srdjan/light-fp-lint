@@ -50,6 +50,12 @@ check("layer-boundary", [
     expect: silent,
   },
   {
+    name: "external package paths do not become local adapters",
+    source:
+      `import type { A } from "npm:pkg/infra";\nimport type { B } from "jsr:@scope/pkg/adapter.ts";\nimport type { C } from "https://example.com/adapters/types.ts";`,
+    expect: silent,
+  },
+  {
     name: "adapters may import adapters",
     source: `import { x } from "../adapters/http.ts";`,
     filename: ADAPTER,

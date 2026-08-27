@@ -1,5 +1,6 @@
 // @light-fp adapter -- hook protocol, filesystem, and subprocess effects live here.
 import { dirname, isAbsolute, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 export type StopInput = Readonly<{
   cwd: string;
@@ -16,9 +17,17 @@ export type LintResult =
   | Readonly<{ _tag: "LintFinished"; code: number }>
   | Readonly<{ _tag: "LintProcessFailure" }>;
 
+export type PluginDetection =
+  | Readonly<{ _tag: "Active" }>
+  | Readonly<{ _tag: "Inactive" }>
+  | Readonly<{ _tag: "DetectionFailure" }>;
+
 export type VerifyCapabilities = Readonly<{
   fileKind: (path: string) => Promise<FileKind>;
-  readTextFile: (path: string) => Promise<string>;
+  detectLightFp: (
+    cwd: string,
+    configPath: string,
+  ) => Promise<PluginDetection>;
   runLint: (cwd: string) => Promise<LintResult>;
 }>;
 
@@ -29,7 +38,7 @@ export type StopResponse =
 
 type ConfigDiscovery =
   | Readonly<{ _tag: "NoConfig" }>
-  | Readonly<{ _tag: "Config"; directory: string; source: string }>
+  | Readonly<{ _tag: "Config"; directory: string; path: string }>
   | Readonly<{ _tag: "DiscoveryFailure" }>;
 
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
@@ -69,113 +78,13 @@ const discoverConfig = async (
       const kind = await capabilities.fileKind(path);
       if (kind === "Failure") return { _tag: "DiscoveryFailure" };
       if (kind === "File") {
-        try {
-          return {
-            _tag: "Config",
-            directory,
-            source: await capabilities.readTextFile(path),
-          };
-        } catch {
-          return { _tag: "DiscoveryFailure" };
-        }
+        return { _tag: "Config", directory, path };
       }
     }
     const parent = dirname(directory);
     if (parent === directory) return { _tag: "NoConfig" };
     directory = parent;
   }
-};
-
-const stripJsonComments = (source: string): string => {
-  let result = "";
-  let inString = false;
-  let escaped = false;
-  let lineComment = false;
-  let blockComment = false;
-
-  for (let index = 0; index < source.length; index += 1) {
-    const current = source[index];
-    const next = source[index + 1];
-    if (lineComment) {
-      if (current === "\n") {
-        lineComment = false;
-        result += current;
-      } else {
-        result += " ";
-      }
-      continue;
-    }
-    if (blockComment) {
-      if (current === "*" && next === "/") {
-        blockComment = false;
-        result += "  ";
-        index += 1;
-      } else {
-        result += current === "\n" ? "\n" : " ";
-      }
-      continue;
-    }
-    if (!inString && current === "/" && next === "/") {
-      lineComment = true;
-      result += "  ";
-      index += 1;
-      continue;
-    }
-    if (!inString && current === "/" && next === "*") {
-      blockComment = true;
-      result += "  ";
-      index += 1;
-      continue;
-    }
-    result += current;
-    if (inString && current === "\\" && !escaped) {
-      escaped = true;
-      continue;
-    }
-    if (current === '"' && !escaped) inString = !inString;
-    escaped = false;
-  }
-  return result;
-};
-
-const stripTrailingCommas = (source: string): string => {
-  let result = "";
-  let inString = false;
-  let escaped = false;
-  for (let index = 0; index < source.length; index += 1) {
-    const current = source[index];
-    if (!inString && current === ",") {
-      let next = index + 1;
-      while (/\s/.test(source[next] ?? "")) next += 1;
-      if (source[next] === "}" || source[next] === "]") continue;
-    }
-    result += current;
-    if (inString && current === "\\" && !escaped) {
-      escaped = true;
-      continue;
-    }
-    if (current === '"' && !escaped) inString = !inString;
-    escaped = false;
-  }
-  return result;
-};
-
-export const configUsesLightFp = (source: string): boolean => {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(stripTrailingCommas(stripJsonComments(source)));
-  } catch {
-    return false;
-  }
-  if (!isRecord(parsed) || !isRecord(parsed.lint)) return false;
-  const plugins = parsed.lint.plugins;
-  if (!Array.isArray(plugins)) return false;
-  return plugins.some((plugin) =>
-    typeof plugin === "string" &&
-    (plugin === "./src/mod.ts"
-      ? parsed.name === "@light-fp/deno-lint-plugin"
-      : /^jsr:@light-fp\/deno-lint-plugin(?:@[^/]+)?$/.test(plugin))
-  );
 };
 
 const lintFailure = (stopHookActive: boolean): StopResponse =>
@@ -218,7 +127,27 @@ export const verifyStop = async (
         "Light FP validation could not inspect the Deno configuration.",
     };
   }
-  if (!configUsesLightFp(config.source)) return {};
+  let detection: PluginDetection;
+  try {
+    detection = await capabilities.detectLightFp(
+      config.directory,
+      config.path,
+    );
+  } catch {
+    detection = { _tag: "DetectionFailure" };
+  }
+  switch (detection._tag) {
+    case "Inactive":
+      return {};
+    case "DetectionFailure":
+      return {
+        continue: false,
+        stopReason:
+          "Light FP validation could not inspect the effective Deno lint configuration.",
+      };
+    case "Active":
+      break;
+  }
 
   let lint: LintResult;
   try {
@@ -234,6 +163,39 @@ export const verifyStop = async (
   }
 };
 
+const activationProbe = fileURLToPath(
+  new URL("./activation_probe.ts", import.meta.url),
+);
+
+const bundledConfigs: readonly string[] = [
+  fileURLToPath(new URL("../deno.json", import.meta.url)),
+  fileURLToPath(new URL("../deno.jsonc", import.meta.url)),
+];
+
+type LintJson = Readonly<{
+  diagnostics: readonly unknown[];
+  errors: readonly unknown[];
+}>;
+
+const parseLintJson = (source: string): LintJson | undefined => {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(source);
+  } catch {
+    return undefined;
+  }
+  if (
+    !isRecord(parsed) || !Array.isArray(parsed.diagnostics) ||
+    !Array.isArray(parsed.errors)
+  ) return undefined;
+  return { diagnostics: parsed.diagnostics, errors: parsed.errors };
+};
+
+const diagnosticCode = (diagnostic: unknown): string | undefined =>
+  isRecord(diagnostic) && typeof diagnostic.code === "string"
+    ? diagnostic.code
+    : undefined;
+
 export const productionCapabilities: VerifyCapabilities = {
   fileKind: async (path) => {
     try {
@@ -242,7 +204,38 @@ export const productionCapabilities: VerifyCapabilities = {
       return error instanceof Deno.errors.NotFound ? "Missing" : "Failure";
     }
   },
-  readTextFile: Deno.readTextFile,
+  detectLightFp: async (cwd, configPath) => {
+    // This checkout excludes the deliberately invalid probe from normal lint.
+    // Its package test pins the local plugin configuration, so activation is
+    // known without asking Deno to lint an excluded target.
+    if (bundledConfigs.includes(configPath)) return { _tag: "Active" };
+    try {
+      const output = await new Deno.Command("deno", {
+        args: [
+          "lint",
+          "--json",
+          `--config=${configPath}`,
+          activationProbe,
+        ],
+        cwd,
+        stdin: "null",
+        stdout: "piped",
+        stderr: "piped",
+      }).output();
+      const result = parseLintJson(new TextDecoder().decode(output.stdout));
+      if (!result || result.errors.length > 0) {
+        return { _tag: "DetectionFailure" };
+      }
+      if (
+        result.diagnostics.some((diagnostic) =>
+          diagnosticCode(diagnostic)?.startsWith("light-fp/") === true
+        )
+      ) return { _tag: "Active" };
+      return { _tag: "Inactive" };
+    } catch {
+      return { _tag: "DetectionFailure" };
+    }
+  },
   runLint: async (cwd) => {
     try {
       const output = await new Deno.Command("deno", {

@@ -1,6 +1,6 @@
 ---
 name: light-fp
-description: Provides Light FP architecture and validation workflow guidance when editing or reviewing a Deno repository whose deno.json configures @light-fp/deno-lint-plugin. Do not use for repositories that do not configure this plugin.
+description: Provides Light FP architecture and validation workflow guidance when editing or reviewing a Deno repository whose deno.json configures @srdjan/light-fp-lint. Do not use for repositories that do not configure this plugin.
 ---
 
 # Light FP workflow

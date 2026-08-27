@@ -1,6 +1,6 @@
 {
   "name": "@srdjan/light-fp-lint",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "exports": {
     ".": "./src/mod.ts",
     "./hook": "./src/cli/hook.ts"
@@ -15,7 +15,8 @@
   },
   "lint": {
     "exclude": [
-      "examples"
+      "examples",
+      "hooks/activation_probe.ts"
     ],
     "rules": {
       "include": [
@@ -38,6 +39,8 @@
     "lint": "deno lint",
     "test": "deno test -A",
     "examples:lint": "deno lint --config examples/deno.json examples",
-    "ci": "deno fmt --check && deno check src tests && deno lint && LIGHT_FP_REQUIRE_NAMED_HOOKS=1 deno test -A"
+    "ci:base": "deno fmt --check && deno check src tests && deno lint",
+    "ci": "deno task ci:base && LIGHT_FP_REQUIRE_NAMED_HOOKS=1 deno test -A",
+    "ci:deno-2.2": "deno task ci:base && LIGHT_FP_REQUIRE_NAMED_HOOKS=1 deno test -A tests/deno_2_2_cli_test.ts tests/agent_hook_test.ts tests/git_hook_test.ts tests/hook_cli_e2e_test.ts tests/package_test.ts"
   }
 }

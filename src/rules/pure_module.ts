@@ -10,6 +10,12 @@ const FUNCTION_SCOPES = new Set([
   "StaticBlock",
 ]);
 
+const IMPORT_EXECUTIONS = new Set([
+  "CallExpression",
+  "NewExpression",
+  "TaggedTemplateExpression",
+]);
+
 const CONTROL_FLOW: Readonly<Record<string, string>> = {
   IfStatement: "a branch",
   ForStatement: "a loop",
@@ -30,18 +36,17 @@ export const pureModule: Deno.lint.Rule = {
     // Module scope means no enclosing function. Testing the direct parent for
     // `Program` never works for an expression: a top-level `await` sits inside a
     // declarator, several nodes down from Program.
-    const atModuleScope = (node: Deno.lint.Node) =>
-      !context.sourceCode.getAncestors(node).some((ancestor) =>
-        FUNCTION_SCOPES.has(ancestor.type)
-      );
+    const atModuleScope = (ancestors: readonly Deno.lint.Node[]) =>
+      !ancestors.some((ancestor) => FUNCTION_SCOPES.has(ancestor.type));
 
     // Statements need one condition more. Only the outermost offending statement
     // is worth reporting: a bare call inside a top-level `if` is one problem, the
     // `if`, not two. So the statement must also sit directly in the module body,
     // looking through the export wrapper.
     const isModuleStatement = (node: Deno.lint.Node) => {
-      if (!atModuleScope(node)) return false;
-      const parent = context.sourceCode.getAncestors(node).at(-1);
+      const ancestors = context.sourceCode.getAncestors(node);
+      if (!atModuleScope(ancestors)) return false;
+      const parent = ancestors.at(-1);
       if (!parent) return false;
       return parent.type === "Program" ||
         parent.type === "ExportNamedDeclaration" ||
@@ -64,15 +69,14 @@ export const pureModule: Deno.lint.Rule = {
     };
 
     const runsOnImport = (node: Deno.lint.Node) => {
-      if (!atModuleScope(node)) return;
-      const coveredByAncestor = context.sourceCode
-        .getAncestors(node)
-        .some((ancestor) =>
-          ancestor.type === "ExpressionStatement" ||
-          ancestor.type === "AwaitExpression" ||
-          ancestor.type === "CallExpression" ||
-          CONTROL_FLOW[ancestor.type] !== undefined
-        );
+      const ancestors = context.sourceCode.getAncestors(node);
+      if (!atModuleScope(ancestors)) return;
+      const coveredByAncestor = ancestors.some((ancestor) =>
+        ancestor.type === "ExpressionStatement" ||
+        ancestor.type === "AwaitExpression" ||
+        IMPORT_EXECUTIONS.has(ancestor.type) ||
+        CONTROL_FLOW[ancestor.type] !== undefined
+      );
       if (coveredByAncestor) return;
       context.report({
         node,
@@ -101,7 +105,7 @@ export const pureModule: Deno.lint.Rule = {
 
       AwaitExpression(node) {
         // An expression, not a statement, so it uses the looser predicate.
-        if (!atModuleScope(node)) return;
+        if (!atModuleScope(context.sourceCode.getAncestors(node))) return;
         context.report({
           node,
           message: "Top-level await runs work when the module is imported.",
@@ -111,6 +115,7 @@ export const pureModule: Deno.lint.Rule = {
       },
 
       CallExpression: runsOnImport,
+      NewExpression: runsOnImport,
       TaggedTemplateExpression: runsOnImport,
 
       IfStatement: controlFlow,

@@ -9,21 +9,21 @@
 //
 // lists every file that opted out of strictness. No glob configuration can.
 
+import { headerComments } from "./comments.ts";
+
 export type Layer = "domain" | "adapter" | "prelude";
 
 export const LAYERS: readonly Layer[] = ["domain", "adapter", "prelude"];
 
 const PRAGMA = /^\s*@light-fp\s+(\S+)/;
 
-const ADAPTER_SEGMENTS = new Set([
+const ADAPTER_SEGMENTS: readonly string[] = [
   "adapters",
   "adapter",
   "infra",
   "scripts",
   "bin",
-]);
-
-const ADAPTER_BASENAMES = new Set(["main.ts"]);
+];
 
 const LINTABLE_EXTENSIONS = [
   "ts",
@@ -67,17 +67,41 @@ export const pathWithinRoot = (
   return posix.startsWith(prefix) ? posix.slice(prefix.length) : posix;
 };
 
-const segmentsOf = (filename: string): readonly string[] =>
-  pathWithinRoot(filename, currentRoot()).split("/").filter(Boolean);
+const pathWithoutDecoration = (filename: string): string =>
+  toPosix(filename).split(/[?#]/, 1)[0];
+
+const lintableStem = (filename: string): string | undefined => {
+  const dot = filename.lastIndexOf(".");
+  if (dot === -1) return undefined;
+  return LINTABLE_EXTENSIONS.includes(filename.slice(dot + 1))
+    ? filename.slice(0, dot)
+    : undefined;
+};
+
+/**
+ * True when a path names adapter-owned code. This is the single authority used
+ * both to classify files and to enforce imports into adapter paths.
+ */
+export const isAdapterPath = (
+  filename: string,
+  root: string | undefined,
+): boolean => {
+  const segments = pathWithinRoot(pathWithoutDecoration(filename), root)
+    .split("/")
+    .filter(Boolean);
+  const basename = segments.at(-1) ?? "";
+  const stem = lintableStem(basename) ??
+    (basename.includes(".") ? "" : basename);
+  return stem === "main" || ADAPTER_SEGMENTS.includes(stem) ||
+    segments.slice(0, -1).some((segment) => ADAPTER_SEGMENTS.includes(segment));
+};
 
 // Split the name at its extension rather than precomputing every marker and
 // extension pair. Two literal arrays and no work at import time.
 export const isTestFile = (filename: string): boolean => {
   const posix = toPosix(filename);
-  const dot = posix.lastIndexOf(".");
-  if (dot === -1) return false;
-  if (!LINTABLE_EXTENSIONS.includes(posix.slice(dot + 1))) return false;
-  const stem = posix.slice(0, dot);
+  const stem = lintableStem(posix);
+  if (!stem) return false;
   return TEST_MARKERS.some((marker) => stem.endsWith(marker));
 };
 
@@ -105,7 +129,7 @@ export const readPragma = (sourceCode: Deno.lint.SourceCode): PragmaLookup => {
     ? firstStatement.range[0]
     : Number.MAX_SAFE_INTEGER;
 
-  for (const comment of sourceCode.getAllComments()) {
+  for (const comment of headerComments(sourceCode, limit)) {
     if (comment.range[0] >= limit) break;
     const match = PRAGMA.exec(comment.value);
     if (!match) continue;
@@ -132,12 +156,7 @@ export const layerOf = (
 
   if (isTestFile(filename)) return "adapter";
 
-  const segments = segmentsOf(filename);
-  const basename = segments.at(-1) ?? "";
-  if (ADAPTER_BASENAMES.has(basename)) return "adapter";
-  if (segments.slice(0, -1).some((segment) => ADAPTER_SEGMENTS.has(segment))) {
-    return "adapter";
-  }
+  if (isAdapterPath(filename, currentRoot())) return "adapter";
 
   return "domain";
 };

@@ -83,6 +83,12 @@ effects are one violation, not three.
 `void expr` is reported too. An explicit discard is still a discard, and letting
 `void` through would turn the rule into a formality.
 
+Logical and conditional wrappers do not change that contract. `ready && run()`,
+`ready ? accept() : reject()`, and `new Box()` each produce a value, so a bare
+statement throws that value away. Assign or return the complete expression. A
+local assignment, update, directive prologue, generator `yield`, and required
+`super()` call are transitions rather than discarded results and remain valid.
+
 ## Why is a cast to a local type allowed?
 
 Because otherwise smart constructors would be impossible, and smart constructors
@@ -139,6 +145,20 @@ The constructors that are genuinely effectful are named individually in
 `no-ambient-effects`: `new Date()` with no arguments reads the clock,
 `new WebSocket` opens a socket. `new Date(ms)` converts a number and is fine.
 
+This allowance applies inside functions. Construction at module scope is a
+different question: it runs during import, so `pure-module` reports it even when
+the constructor itself is deterministic. Export a function that constructs the
+value and let `main.ts` decide when to call it.
+
+## Why are callable annotations outside `readonly-data`?
+
+The rule protects declared data shapes, not every object-shaped parameter or
+return annotation. Treating a method parameter as stored data creates noise
+without establishing a useful boundary. Method signatures, function-valued
+properties, function type aliases, call signatures, and constructor signatures
+therefore form callable boundaries. Ordinary properties around those members
+still need `readonly`.
+
 ## Why must suppressions carry a reason?
 
 A strict gate accumulates holes. That is not a failure of the gate, it is what
@@ -193,6 +213,13 @@ Putting Git or agent behavior inside lint rules would mix workflow effects into
 the rule engine and create a second authority. Keeping the layers separate lets
 each remain small: rules diagnose code, hooks invoke the rules, the skill guides
 design, and CI decides whether a change can ship.
+
+The Stop hook does not parse one config and guess whether the plugin is active.
+It finds the nearest Deno config for the lint scope, then asks Deno to load that
+config's effective settings. This matters in workspaces: a member config can
+inherit the plugin from the workspace root. Detection and lint subprocess output
+stay private; the hook protocol returns only a fixed correction or failure
+message.
 
 ## What this cannot do
 

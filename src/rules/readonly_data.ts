@@ -7,11 +7,29 @@ const DATA_DECLARATIONS = new Set([
   "TSInterfaceDeclaration",
 ]);
 
+const CALLABLE_TYPES = new Set([
+  "FunctionDeclaration",
+  "FunctionExpression",
+  "ArrowFunctionExpression",
+  "MethodDefinition",
+  "TSFunctionType",
+  "TSMethodSignature",
+  "TSCallSignatureDeclaration",
+  "TSConstructSignatureDeclaration",
+  "TSConstructorType",
+]);
+
 const MUTABLE_COLLECTIONS: Readonly<Record<string, string>> = {
   Array: "ReadonlyArray",
   Map: "ReadonlyMap",
   Set: "ReadonlySet",
 };
+
+type TypePosition = Readonly<{
+  readonly inData: boolean;
+  readonly inAmbient: boolean;
+  readonly parent: Deno.lint.Node | undefined;
+}>;
 
 /**
  * Visiting the member nodes directly, rather than walking down from a type alias,
@@ -24,19 +42,29 @@ export const readonlyData: Deno.lint.Rule = {
   create(context) {
     if (layerOf(context.filename, context.sourceCode) === "adapter") return {};
 
-    const inDataPosition = (node: Deno.lint.Node): boolean =>
-      context.sourceCode.getAncestors(node).some((ancestor) =>
-        DATA_DECLARATIONS.has(ancestor.type)
-      );
+    const typePosition = (node: Deno.lint.Node): TypePosition => {
+      const ancestors = context.sourceCode.getAncestors(node);
+      let inData: boolean | undefined;
+      let inAmbient = false;
+      for (let index = ancestors.length - 1; index >= 0; index -= 1) {
+        const ancestor = ancestors[index];
+        if (
+          ancestor.type === "TSModuleDeclaration" ||
+          (ancestor.type === "TSInterfaceDeclaration" && ancestor.declare)
+        ) inAmbient = true;
+        if (inData !== undefined) continue;
+        if (CALLABLE_TYPES.has(ancestor.type)) inData = false;
+        if (DATA_DECLARATIONS.has(ancestor.type)) inData = true;
+      }
+      return {
+        inData: inData ?? false,
+        inAmbient,
+        parent: ancestors.at(-1),
+      };
+    };
 
-    const inAmbientContext = (node: Deno.lint.Node): boolean =>
-      context.sourceCode.getAncestors(node).some((ancestor) =>
-        ancestor.type === "TSModuleDeclaration" ||
-        (ancestor.type === "TSInterfaceDeclaration" && ancestor.declare)
-      );
-
-    const parentOf = (node: Deno.lint.Node): Deno.lint.Node | undefined =>
-      context.sourceCode.getAncestors(node).at(-1);
+    const isCallableProperty = (node: Deno.lint.TSPropertySignature): boolean =>
+      node.typeAnnotation?.typeAnnotation.type === "TSFunctionType";
 
     const readonlyArrayText = (node: Deno.lint.Node): string => {
       if (node.type !== "TSArrayType") return context.sourceCode.getText(node);
@@ -49,8 +77,10 @@ export const readonlyData: Deno.lint.Rule = {
 
     return {
       TSPropertySignature(node) {
-        if (inAmbientContext(node)) return;
-        if (!inDataPosition(node)) return;
+        const position = typePosition(node);
+        if (position.inAmbient) return;
+        if (isCallableProperty(node)) return;
+        if (!position.inData) return;
         if (node.readonly) return;
         context.report({
           node: node.key,
@@ -61,8 +91,9 @@ export const readonlyData: Deno.lint.Rule = {
       },
 
       TSIndexSignature(node) {
-        if (inAmbientContext(node)) return;
-        if (!inDataPosition(node)) return;
+        const position = typePosition(node);
+        if (position.inAmbient) return;
+        if (!position.inData) return;
         if (node.readonly) return;
         context.report({
           node,
@@ -73,9 +104,10 @@ export const readonlyData: Deno.lint.Rule = {
       },
 
       TSArrayType(node) {
-        if (inAmbientContext(node)) return;
-        if (!inDataPosition(node)) return;
-        const parent = parentOf(node);
+        const position = typePosition(node);
+        if (position.inAmbient) return;
+        if (!position.inData) return;
+        const parent = position.parent;
         // `readonly T[]` parses as a readonly type operator wrapping the array.
         if (
           parent && parent.type === "TSTypeOperator" &&
@@ -95,11 +127,12 @@ export const readonlyData: Deno.lint.Rule = {
       },
 
       TSTypeReference(node) {
-        if (inAmbientContext(node)) return;
         if (node.typeName.type !== "Identifier") return;
         const replacement = MUTABLE_COLLECTIONS[node.typeName.name];
         if (!replacement) return;
-        if (!inDataPosition(node)) return;
+        const position = typePosition(node);
+        if (position.inAmbient) return;
+        if (!position.inData) return;
         context.report({
           node: node.typeName,
           message:

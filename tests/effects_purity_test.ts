@@ -129,6 +129,8 @@ for (
     ["destructuring initializer", `const { a } = main();`],
     ["tagged template initializer", "export const x = render`page`;"],
     ["nested initializer calls", `export const x = pipe(main());`],
+    ["constructed initializer", `export const cache = new Map();`],
+    ["nested construction", `export const cache = wrap(new Map());`],
   ] as const
 ) {
   Deno.test(`pure-module: ${testCase[0]} runs on import`, () => {
@@ -177,6 +179,18 @@ for (
       "function expression",
       `export const run = function (): number { validate(input); return 1; };`,
     ],
+    [
+      "logical expression",
+      `export const run = () => { ready && validate(input); return 1; };`,
+    ],
+    [
+      "conditional expression",
+      `export const run = () => { ready ? validate(input) : reject(input); return 1; };`,
+    ],
+    [
+      "constructed value",
+      `export const run = () => { new ResultBox(input); return 1; };`,
+    ],
   ] as const
 ) {
   Deno.test(`no-discarded-values: ${testCase[0]} is covered`, () => {
@@ -189,6 +203,26 @@ Deno.test("no-discarded-values: super() is required constructor work", () => {
     "light-fp/no-discarded-values",
     `class Child extends Parent { constructor() { super(); } }`,
     0,
+  );
+});
+
+Deno.test("no-discarded-values: state updates, directives, and yields are used", () => {
+  for (
+    const source of [
+      `export const run = () => { let n = 0; n = 1; n += 1; n++; return n; };`,
+      `export const run = () => { "use strict"; return 1; };`,
+      `export function* values() { yield 1; }`,
+    ]
+  ) {
+    assertRuleCount("light-fp/no-discarded-values", source, 0);
+  }
+});
+
+Deno.test("no-discarded-values: a later string literal is a discarded value", () => {
+  assertRuleCount(
+    "light-fp/no-discarded-values",
+    `export const run = () => { const value = 1; "not a directive"; return value; };`,
+    1,
   );
 });
 
