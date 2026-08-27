@@ -69,6 +69,7 @@ const expectedDiagnostics: Readonly<Record<string, readonly string[]>> = {
     "light-fp/pure-module",
     "light-fp/pure-module",
     "light-fp/pure-module",
+    "light-fp/pure-module",
     "light-fp/readonly-data",
     "light-fp/readonly-data",
   ],
