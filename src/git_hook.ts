@@ -23,8 +23,10 @@ export type GitVersion =
 export type HookState =
   | { readonly _tag: "Absent" }
   | { readonly _tag: "Installed" }
+  | { readonly _tag: "PartialInstall" }
   | {
     readonly _tag: "Conflict";
+    readonly ownership: "Local" | "NonLocal";
     readonly observedCommand: string | null;
     readonly observedEvents: readonly string[];
   };
@@ -37,15 +39,22 @@ export type HookConfigEntry = {
 
 export type HookDecision =
   | { readonly _tag: "Write" }
+  | { readonly _tag: "Repair" }
   | { readonly _tag: "Remove" }
   | {
     readonly _tag: "NoChange";
     readonly command: HookCommand["_tag"];
     readonly state: "Absent" | "Installed";
   }
+  | {
+    readonly _tag: "InstalledButInactive";
+    readonly version: Extract<GitVersion, { readonly _tag: "GitVersion" }>;
+  }
+  | { readonly _tag: "IncompleteInstall" }
   | { readonly _tag: "UnsupportedGit"; readonly version: GitVersion }
   | {
     readonly _tag: "RefuseConflict";
+    readonly ownership: "Local" | "NonLocal";
     readonly observedCommand: string | null;
     readonly observedEvents: readonly string[];
   };
@@ -96,9 +105,10 @@ export const hookState = (entries: readonly HookConfigEntry[]): HookState => {
     ? undefined
     : commands.map((entry) => entry.value).join("\n");
   const observedEvents = events.map((entry) => entry.value);
+  const localOnly = entries.every((entry) => entry.scope === "local");
   if (
     entries.length === 2 &&
-    entries.every((entry) => entry.scope === "local") &&
+    localOnly &&
     commands.length === 1 &&
     observedCommand === lightFpHook.command &&
     events.length === 1 &&
@@ -106,8 +116,15 @@ export const hookState = (entries: readonly HookConfigEntry[]): HookState => {
   ) {
     return { _tag: "Installed" };
   }
+  if (
+    entries.length === 1 && localOnly && commands.length === 1 &&
+    observedCommand === lightFpHook.command && events.length === 0
+  ) {
+    return { _tag: "PartialInstall" };
+  }
   return {
     _tag: "Conflict",
+    ownership: localOnly ? "Local" : "NonLocal",
     observedCommand: observedCommand ?? null,
     observedEvents: [...observedEvents],
   };
@@ -133,6 +150,7 @@ const conflictDecision = (
   state: Extract<HookState, { readonly _tag: "Conflict" }>,
 ): HookDecision => ({
   _tag: "RefuseConflict",
+  ownership: state.ownership,
   observedCommand: state.observedCommand,
   observedEvents: state.observedEvents,
 });
@@ -143,6 +161,8 @@ const installDecision = (state: HookState): HookDecision => {
       return { _tag: "Write" };
     case "Installed":
       return { _tag: "NoChange", command: "Install", state: "Installed" };
+    case "PartialInstall":
+      return { _tag: "Repair" };
     case "Conflict":
       return conflictDecision(state);
   }
@@ -154,6 +174,8 @@ const statusDecision = (state: HookState): HookDecision => {
       return { _tag: "NoChange", command: "Status", state: "Absent" };
     case "Installed":
       return { _tag: "NoChange", command: "Status", state: "Installed" };
+    case "PartialInstall":
+      return { _tag: "IncompleteInstall" };
     case "Conflict":
       return conflictDecision(state);
   }
@@ -165,8 +187,12 @@ const uninstallDecision = (state: HookState): HookDecision => {
       return { _tag: "NoChange", command: "Uninstall", state: "Absent" };
     case "Installed":
       return { _tag: "Remove" };
+    case "PartialInstall":
+      return { _tag: "Remove" };
     case "Conflict":
-      return conflictDecision(state);
+      return state.ownership === "Local"
+        ? { _tag: "Remove" }
+        : conflictDecision(state);
   }
 };
 
@@ -180,6 +206,12 @@ export const decideHookAction = (
     (version._tag === "InvalidGitVersion" || !versionAtLeast(version))
   ) {
     return { _tag: "UnsupportedGit", version };
+  }
+  if (
+    command._tag === "Status" && state._tag === "Installed" &&
+    version._tag === "GitVersion" && !versionAtLeast(version)
+  ) {
+    return { _tag: "InstalledButInactive", version };
   }
 
   switch (command._tag) {

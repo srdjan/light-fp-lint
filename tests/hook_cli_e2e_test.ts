@@ -26,12 +26,15 @@ const run = async (
   command: string,
   args: readonly string[],
   cwd: string,
+  extraEnv: Readonly<Record<string, string>> = {},
 ): Promise<ProcessResult> => {
   const output = await new Deno.Command(command, {
     args: [...args],
     cwd,
     env: {
+      ...extraEnv,
       GIT_CONFIG_GLOBAL: join(cwd, "global.gitconfig"),
+      GIT_CONFIG_NOSYSTEM: "1",
       PATH: executablePath,
     },
     stdin: "null",
@@ -91,6 +94,35 @@ const withRepository = async (
     await Deno.remove(directory, { recursive: true });
   }
 };
+
+namedHookTest(
+  "hook CLI: E2E subprocesses ignore system Git configuration",
+  async () => {
+    await withRepository(async (directory) => {
+      const systemConfig = join(directory, "system.gitconfig");
+      await Deno.writeTextFile(
+        systemConfig,
+        '[hook "light-fp"]\n\tcommand = deno lint\n\tevent = pre-commit\n',
+      );
+
+      const result = await run(
+        git,
+        [
+          "config",
+          "get",
+          "--show-scope",
+          "--all",
+          "--regexp",
+          "^hook\\.light-fp\\.",
+        ],
+        directory,
+        { GIT_CONFIG_SYSTEM: systemConfig },
+      );
+      assertEquals(result.code, 1, result.stdout + result.stderr);
+      assertEquals(result.stdout, "");
+    });
+  },
+);
 
 namedHookTest(
   "hook CLI: install, status, reinstall, and uninstall lifecycle",
@@ -187,7 +219,7 @@ namedHookTest(
 );
 
 namedHookTest(
-  "hook CLI: conflicting local ownership is never changed",
+  "hook CLI: conflicting local ownership is diagnosed and can be uninstalled",
   async () => {
     await withRepository(async (directory) => {
       for (
@@ -203,21 +235,19 @@ namedHookTest(
           0,
         );
       }
-      const before = await runGit(directory, [
-        "config",
-        "get",
-        "--local",
-        "--show-names",
-        "--all",
-        "--regexp",
-        "^hook\\.light-fp\\.",
-      ]);
+      const refused = await runCli(directory, ["install"]);
+      assertEquals(refused.code, 4);
+      assertStringIncludes(refused.stderr, "conflict");
+      assertStringIncludes(refused.stderr, 'command: "deno lint"');
+      assertStringIncludes(refused.stderr, 'events: ["pre-commit"]');
+      assertStringIncludes(
+        refused.stderr,
+        "git config remove-section --local hook.light-fp",
+      );
 
-      for (const action of ["install", "uninstall"]) {
-        const refused = await runCli(directory, [action]);
-        assertEquals(refused.code, 4);
-        assertStringIncludes(refused.stderr, "conflict");
-      }
+      const removed = await runCli(directory, ["uninstall"]);
+      assertEquals(removed.code, 0, removed.stderr);
+      assertStringIncludes(removed.stdout, "removed");
 
       const after = await runGit(directory, [
         "config",
@@ -228,7 +258,70 @@ namedHookTest(
         "--regexp",
         "^hook\\.light-fp\\.",
       ]);
-      assertEquals(after.stdout, before.stdout);
+      assertEquals(after.code, 1);
+      assertEquals(after.stdout, "");
+    });
+  },
+);
+
+namedHookTest(
+  "hook CLI: install repairs its exact command-only partial state",
+  async () => {
+    await withRepository(async (directory) => {
+      assertEquals(
+        (await runGit(directory, [
+          "config",
+          "set",
+          "--local",
+          "hook.light-fp.command",
+          "deno lint",
+        ])).code,
+        0,
+      );
+
+      const incomplete = await runCli(directory, ["status"]);
+      assertEquals(incomplete.code, 4);
+      assertStringIncludes(incomplete.stderr, "incomplete installation");
+      assertStringIncludes(incomplete.stderr, "light-fp hook install");
+
+      const repaired = await runCli(directory, ["install"]);
+      assertEquals(repaired.code, 0, repaired.stderr);
+      assertStringIncludes(repaired.stdout, "installed");
+
+      const status = await runCli(directory, ["status"]);
+      assertEquals(status.code, 0, status.stderr);
+      assertEquals(status.stdout, "installed\n");
+    });
+  },
+);
+
+namedHookTest(
+  "hook CLI: uninstall removes its exact command-only partial state",
+  async () => {
+    await withRepository(async (directory) => {
+      assertEquals(
+        (await runGit(directory, [
+          "config",
+          "set",
+          "--local",
+          "hook.light-fp.command",
+          "deno lint",
+        ])).code,
+        0,
+      );
+
+      const removed = await runCli(directory, ["uninstall"]);
+      assertEquals(removed.code, 0, removed.stderr);
+      assertStringIncludes(removed.stdout, "removed");
+
+      const after = await runGit(directory, [
+        "config",
+        "--local",
+        "--get-regexp",
+        "^hook\\.light-fp\\.",
+      ]);
+      assertEquals(after.code, 1, after.stdout + after.stderr);
+      assertEquals(after.stdout, "");
     });
   },
 );
@@ -263,6 +356,7 @@ namedHookTest("hook CLI: non-local ownership is never adopted", async () => {
       const refused = await runCli(directory, [action]);
       assertEquals(refused.code, 4);
       assertStringIncludes(refused.stderr, "conflict");
+      assertStringIncludes(refused.stderr, "does not remove non-local entries");
     }
     const local = await runGit(directory, [
       "config",
@@ -273,6 +367,46 @@ namedHookTest("hook CLI: non-local ownership is never adopted", async () => {
     ]);
     assertEquals(local.code, 1);
     assertEquals(local.stdout, "");
+  });
+});
+
+namedHookTest("hook CLI: mixed-scope ownership is never changed", async () => {
+  await withRepository(async (directory) => {
+    const globalConfig = join(directory, "global.gitconfig");
+    assertEquals(
+      (await runGit(directory, [
+        "config",
+        "set",
+        "--file",
+        globalConfig,
+        "hook.light-fp.command",
+        "deno lint",
+      ])).code,
+      0,
+    );
+    assertEquals(
+      (await runGit(directory, [
+        "config",
+        "set",
+        "--local",
+        "hook.light-fp.enabled",
+        "false",
+      ])).code,
+      0,
+    );
+
+    const refused = await runCli(directory, ["uninstall"]);
+    assertEquals(refused.code, 4);
+    assertStringIncludes(refused.stderr, "does not remove non-local entries");
+    assertEquals(
+      (await runGit(directory, [
+        "config",
+        "get",
+        "--local",
+        "hook.light-fp.enabled",
+      ])).stdout,
+      "false\n",
+    );
   });
 });
 
@@ -299,6 +433,41 @@ Deno.test("hook CLI: old Git decision issues no mutation", async () => {
   assertEquals(calls, [["rev-parse", "--show-toplevel"], ["--version"]]);
 });
 
+Deno.test("hook CLI: old Git status reports an installed hook as inactive", async () => {
+  const fakeGit: RunGit = (args) => {
+    if (args[0] === "rev-parse") {
+      return Promise.resolve({ code: 0, stdout: "/repo\n", stderr: "" });
+    }
+    if (args[0] === "--version") {
+      return Promise.resolve({
+        code: 0,
+        stdout: "git version 2.54.0\n",
+        stderr: "",
+      });
+    }
+    if (args[0] === "config" && args.includes("--get-regexp")) {
+      const entries = [
+        "hook.light-fp.command\ndeno lint\0",
+        "hook.light-fp.event\npre-commit\0",
+      ];
+      return Promise.resolve({
+        code: 0,
+        stdout: args.includes("--show-scope")
+          ? entries.map((entry) => `local\0${entry}`).join("")
+          : entries.join(""),
+        stderr: "",
+      });
+    }
+    return Promise.resolve({ code: 99, stdout: "", stderr: "unexpected" });
+  };
+
+  const result = await runHookCli(["status"], fakeGit);
+  assertEquals(result, {
+    exitCode: 0,
+    message: "installed but inactive: Git 2.54.0 is older than 2.55",
+  });
+});
+
 Deno.test("hook CLI: failed event write rolls back only the owned command", async () => {
   const calls: string[][] = [];
   const entries: { key: string; value: string }[] = [];
@@ -320,7 +489,7 @@ Deno.test("hook CLI: failed event write rolls back only the owned command", asyn
         stderr: "",
       });
     }
-    if (args[0] === "config" && args[1] === "get") {
+    if (args[0] === "config" && args.includes("--get-regexp")) {
       const output = configOutput(args.includes("--show-scope"));
       return Promise.resolve({
         code: output.length === 0 ? 1 : 0,
@@ -374,6 +543,129 @@ Deno.test("hook CLI: failed event write rolls back only the owned command", asyn
   const status = await runHookCli(["status"], fakeGit);
   assertEquals(status.exitCode, 4);
   assertStringIncludes(status.message, "conflict");
+});
+
+Deno.test("hook CLI: failed partial repair preserves the existing command", async () => {
+  const calls: string[][] = [];
+  const entries = [{ key: "hook.light-fp.command", value: "deno lint" }];
+  const configOutput = (scoped: boolean): string =>
+    entries.map((entry) =>
+      scoped
+        ? `local\0${entry.key}\n${entry.value}\0`
+        : `${entry.key}\n${entry.value}\0`
+    ).join("");
+  const fakeGit: RunGit = (args) => {
+    calls.push([...args]);
+    if (args[0] === "rev-parse") {
+      return Promise.resolve({ code: 0, stdout: "/repo\n", stderr: "" });
+    }
+    if (args[0] === "--version") {
+      return Promise.resolve({
+        code: 0,
+        stdout: "git version 2.55.0\n",
+        stderr: "",
+      });
+    }
+    if (args[0] === "config" && args.includes("--get-regexp")) {
+      return Promise.resolve({
+        code: 0,
+        stdout: configOutput(args.includes("--show-scope")),
+        stderr: "",
+      });
+    }
+    if (
+      args[0] === "config" && args[1] === "set" &&
+      args.includes("hook.light-fp.command")
+    ) {
+      return Promise.resolve({ code: 0, stdout: "", stderr: "" });
+    }
+    if (
+      args[0] === "config" && args[1] === "set" &&
+      args.includes("hook.light-fp.event")
+    ) {
+      return Promise.resolve({ code: 5, stdout: "", stderr: "write failed" });
+    }
+    if (args[0] === "config" && args[1] === "unset") {
+      entries.splice(0, entries.length);
+      return Promise.resolve({ code: 0, stdout: "", stderr: "" });
+    }
+    return Promise.resolve({ code: 99, stdout: "", stderr: "unexpected" });
+  };
+
+  const repaired = await runHookCli(["install"], fakeGit);
+  assertEquals(repaired, {
+    exitCode: 1,
+    message: "failed to write hook event",
+  });
+  assertEquals(entries, [
+    { key: "hook.light-fp.command", value: "deno lint" },
+  ]);
+  assertEquals(calls.at(-1), [
+    "config",
+    "set",
+    "--local",
+    "hook.light-fp.event",
+    "pre-commit",
+  ]);
+});
+
+Deno.test("hook CLI: concurrent partial repairs keep one event", async () => {
+  const entries = [{ key: "hook.light-fp.command", value: "deno lint" }];
+  const pendingReads: Array<() => void> = [];
+  const configOutput = (scoped: boolean): string =>
+    entries.map((entry) =>
+      scoped
+        ? `local\0${entry.key}\n${entry.value}\0`
+        : `${entry.key}\n${entry.value}\0`
+    ).join("");
+  const fakeGit: RunGit = (args) => {
+    if (args[0] === "rev-parse") {
+      return Promise.resolve({ code: 0, stdout: "/repo\n", stderr: "" });
+    }
+    if (args[0] === "--version") {
+      return Promise.resolve({
+        code: 0,
+        stdout: "git version 2.55.0\n",
+        stderr: "",
+      });
+    }
+    if (args[0] === "config" && args.includes("--get-regexp")) {
+      const scoped = args.includes("--show-scope");
+      return new Promise((resolve) => {
+        pendingReads.push(() =>
+          resolve({ code: 0, stdout: configOutput(scoped), stderr: "" })
+        );
+        if (pendingReads.length === 4) {
+          const reads = pendingReads.splice(0);
+          for (const release of reads) release();
+        }
+      });
+    }
+    if (
+      args[0] === "config" && args[1] === "set" &&
+      args.includes("hook.light-fp.event")
+    ) {
+      if (!args.includes("--append")) {
+        const event = entries.findIndex((entry) =>
+          entry.key === "hook.light-fp.event"
+        );
+        if (event >= 0) entries.splice(event, 1);
+      }
+      entries.push({ key: "hook.light-fp.event", value: "pre-commit" });
+      return Promise.resolve({ code: 0, stdout: "", stderr: "" });
+    }
+    return Promise.resolve({ code: 99, stdout: "", stderr: "unexpected" });
+  };
+
+  const results = await Promise.all([
+    runHookCli(["install"], fakeGit),
+    runHookCli(["install"], fakeGit),
+  ]);
+  assertEquals(results.map((result) => result.exitCode), [0, 0]);
+  assertEquals(entries, [
+    { key: "hook.light-fp.command", value: "deno lint" },
+    { key: "hook.light-fp.event", value: "pre-commit" },
+  ]);
 });
 
 Deno.test("hook CLI: outside a repository fails without config mutation", async () => {

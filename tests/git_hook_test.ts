@@ -68,6 +68,9 @@ Deno.test("git hook: classifies only the exact owned configuration as installed"
       { scope: "local", key: "hook.light-fp.event", value: "pre-commit" },
     ], "Installed"],
     [[
+      { scope: "local", key: "hook.light-fp.command", value: "deno lint" },
+    ], "PartialInstall"],
+    [[
       { scope: "local", key: "hook.light-fp.command", value: "deno task lint" },
       { scope: "local", key: "hook.light-fp.event", value: "pre-commit" },
     ], "Conflict"],
@@ -96,7 +99,9 @@ Deno.test("git hook: classifies only the exact owned configuration as installed"
   }
 });
 
-const version = (minor: number): GitVersion => ({
+const version = (
+  minor: number,
+): Extract<GitVersion, { readonly _tag: "GitVersion" }> => ({
   _tag: "GitVersion",
   major: 2,
   minor,
@@ -123,14 +128,46 @@ Deno.test("git hook: install decisions are versioned, idempotent, and safe", () 
   assertEquals(
     decideHookAction(command("Install"), version(55), {
       _tag: "Conflict",
+      ownership: "Local",
       observedCommand: "other",
       observedEvents: ["pre-commit"],
     })._tag,
     "RefuseConflict",
   );
+  assertEquals(
+    decideHookAction(
+      command("Install"),
+      version(55),
+      hookState([{
+        scope: "local",
+        key: "hook.light-fp.command",
+        value: "deno lint",
+      }]),
+    )._tag,
+    "Repair",
+  );
+  assertEquals(
+    decideHookAction(
+      command("Install"),
+      version(55),
+      hookState([
+        {
+          scope: "local",
+          key: "hook.light-fp.command",
+          value: "deno lint",
+        },
+        {
+          scope: "local",
+          key: "hook.light-fp.enabled",
+          value: "false",
+        },
+      ]),
+    )._tag,
+    "RefuseConflict",
+  );
 });
 
-Deno.test("git hook: uninstall removes only exact ownership", () => {
+Deno.test("git hook: uninstall removes locally owned namespace states", () => {
   assertEquals(
     decideHookAction(command("Uninstall"), version(55), {
       _tag: "Installed",
@@ -143,18 +180,73 @@ Deno.test("git hook: uninstall removes only exact ownership", () => {
     "NoChange",
   );
   assertEquals(
-    decideHookAction(command("Uninstall"), version(55), {
-      _tag: "Conflict",
-      observedCommand: "deno lint",
-      observedEvents: ["pre-push"],
-    })._tag,
+    decideHookAction(
+      command("Uninstall"),
+      version(55),
+      hookState([{
+        scope: "local",
+        key: "hook.light-fp.command",
+        value: "deno lint",
+      }]),
+    )._tag,
+    "Remove",
+  );
+  assertEquals(
+    decideHookAction(
+      command("Uninstall"),
+      version(55),
+      hookState([
+        {
+          scope: "local",
+          key: "hook.light-fp.command",
+          value: "deno lint",
+        },
+        {
+          scope: "local",
+          key: "hook.light-fp.event",
+          value: "pre-push",
+        },
+      ]),
+    )._tag,
+    "Remove",
+  );
+  assertEquals(
+    decideHookAction(
+      command("Uninstall"),
+      version(55),
+      hookState([{
+        scope: "global",
+        key: "hook.light-fp.command",
+        value: "deno lint",
+      }]),
+    )._tag,
     "RefuseConflict",
   );
 });
 
-Deno.test("git hook: status is read-only across supported versions", () => {
+Deno.test("git hook: status reports installed hooks inactive on old Git", () => {
   assertEquals(
-    decideHookAction(command("Status"), version(1), { _tag: "Installed" }),
+    decideHookAction(command("Status"), version(55), { _tag: "Installed" }),
     { _tag: "NoChange", command: "Status", state: "Installed" },
+  );
+  assertEquals(
+    decideHookAction(
+      command("Status"),
+      version(55),
+      hookState([{
+        scope: "local",
+        key: "hook.light-fp.command",
+        value: "deno lint",
+      }]),
+    ),
+    { _tag: "IncompleteInstall" },
+  );
+  assertEquals(
+    decideHookAction(
+      command("Status"),
+      version(54),
+      { _tag: "Installed" },
+    ),
+    { _tag: "InstalledButInactive", version: version(54) },
   );
 });

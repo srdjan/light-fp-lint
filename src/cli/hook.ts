@@ -85,22 +85,16 @@ const readNamespace = async (
   const args = scoped
     ? [
       "config",
-      "get",
       "--show-scope",
-      "--show-names",
       "--null",
-      "--all",
-      "--regexp",
+      "--get-regexp",
       namespacePattern,
     ]
     : [
       "config",
-      "get",
       "--local",
-      "--show-names",
       "--null",
-      "--all",
-      "--regexp",
+      "--get-regexp",
       namespacePattern,
     ];
   const result = await runGit(args);
@@ -119,10 +113,39 @@ const unsupported = (): CliResult => ({
     "unsupported Git: automatic hook management requires Git 2.55 or newer; add deno lint to your existing hook system manually",
 });
 
-const conflict = (): CliResult => ({
+const conflict = (
+  decision: Extract<HookDecision, { readonly _tag: "RefuseConflict" }>,
+): CliResult => {
+  const localRemoval =
+    `git config remove-section --local hook.${lightFpHook.name}`;
+  const observed = `command: ${
+    decision.observedCommand === null
+      ? "missing"
+      : JSON.stringify(decision.observedCommand)
+  }; events: ${JSON.stringify(decision.observedEvents)}`;
+  return {
+    exitCode: 4,
+    message: decision.ownership === "Local"
+      ? `conflict: hook.${lightFpHook.name} is configured differently (${observed}); refusing to modify it; remove the local section with: ${localRemoval}`
+      : `conflict: hook.${lightFpHook.name} has non-local configuration (${observed}); refusing to modify it; inspect its effective scope before removal; ${localRemoval} removes only a local section and does not remove non-local entries`,
+  };
+};
+
+const incompleteInstall = (): CliResult => ({
   exitCode: 4,
+  message: `incomplete installation: hook.${lightFpHook.name} has command ${
+    JSON.stringify(lightFpHook.command)
+  } but events []; run light-fp hook install to repair it, or remove it with: git config remove-section --local hook.${lightFpHook.name}`,
+});
+
+const installedButInactive = (
+  decision: Extract<HookDecision, {
+    readonly _tag: "InstalledButInactive";
+  }>,
+): CliResult => ({
+  exitCode: 0,
   message:
-    "conflict: hook.light-fp is configured differently; refusing to modify it",
+    `installed but inactive: Git ${decision.version.major}.${decision.version.minor}.${decision.version.patch} is older than ${lightFpHook.minimumGitVersion.major}.${lightFpHook.minimumGitVersion.minor}`,
 });
 
 const noChangeResult = (
@@ -142,6 +165,15 @@ const noChangeResult = (
   }
 };
 
+const setHookEvent = (runGit: RunGit): Promise<GitResult> =>
+  runGit([
+    "config",
+    "set",
+    "--local",
+    `hook.${lightFpHook.name}.event`,
+    lightFpHook.event,
+  ]);
+
 const applyDecision = async (
   decision: HookDecision,
   runGit: RunGit,
@@ -158,14 +190,7 @@ const applyDecision = async (
       if (command.code !== 0) {
         return { exitCode: 1, message: "failed to write hook command" };
       }
-      const event = await runGit([
-        "config",
-        "set",
-        "--local",
-        "--append",
-        `hook.${lightFpHook.name}.event`,
-        lightFpHook.event,
-      ]);
+      const event = await setHookEvent(runGit);
       if (event.code !== 0) {
         await runGit([
           "config",
@@ -178,6 +203,12 @@ const applyDecision = async (
         return { exitCode: 1, message: "failed to write hook event" };
       }
       return { exitCode: 0, message: "installed" };
+    }
+    case "Repair": {
+      const event = await setHookEvent(runGit);
+      return event.code === 0
+        ? { exitCode: 0, message: "installed" }
+        : { exitCode: 1, message: "failed to write hook event" };
     }
     case "Remove": {
       const removed = await runGit([
@@ -192,10 +223,14 @@ const applyDecision = async (
     }
     case "NoChange":
       return noChangeResult(decision);
+    case "InstalledButInactive":
+      return installedButInactive(decision);
+    case "IncompleteInstall":
+      return incompleteInstall();
     case "UnsupportedGit":
       return unsupported();
     case "RefuseConflict":
-      return conflict();
+      return conflict(decision);
   }
 };
 

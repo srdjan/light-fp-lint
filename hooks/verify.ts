@@ -191,6 +191,12 @@ const lintFailure = (stopHookActive: boolean): StopResponse =>
         "Light FP validation failed. Run deno lint, inspect the local diagnostics, and fix the design.",
     };
 
+const lintProcessFailure = (): StopResponse => ({
+  continue: false,
+  stopReason:
+    "Light FP validation could not start deno lint. Check that deno is available on PATH and allowed by the hook configuration.",
+});
+
 export const verifyStop = async (
   raw: string,
   capabilities: VerifyCapabilities,
@@ -220,9 +226,12 @@ export const verifyStop = async (
   } catch {
     lint = { _tag: "LintProcessFailure" };
   }
-  return lint._tag === "LintFinished" && lint.code === 0
-    ? {}
-    : lintFailure(parsed.input.stopHookActive);
+  switch (lint._tag) {
+    case "LintFinished":
+      return lint.code === 0 ? {} : lintFailure(parsed.input.stopHookActive);
+    case "LintProcessFailure":
+      return lintProcessFailure();
+  }
 };
 
 export const productionCapabilities: VerifyCapabilities = {
@@ -236,7 +245,7 @@ export const productionCapabilities: VerifyCapabilities = {
   readTextFile: Deno.readTextFile,
   runLint: async (cwd) => {
     try {
-      const output = await new Deno.Command(Deno.execPath(), {
+      const output = await new Deno.Command("deno", {
         args: ["lint"],
         cwd,
         stdin: "null",

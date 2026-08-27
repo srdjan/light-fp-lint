@@ -1,4 +1,5 @@
 import { assertEquals, assertStringIncludes } from "@std/assert";
+import { delimiter } from "node:path";
 import { fromFileUrl, join } from "@std/path";
 import {
   configUsesLightFp,
@@ -39,6 +40,50 @@ const fakeCapabilities = (
       },
     },
   };
+};
+
+const writeLocalPluginFixture = async (
+  directory: string,
+  domainSource: string,
+): Promise<void> => {
+  const src = join(directory, "src");
+  await Deno.mkdir(src);
+  await Deno.writeTextFile(
+    join(directory, "deno.json"),
+    '{"name":"@light-fp/deno-lint-plugin","lint":{"plugins":["./src/mod.ts"]}}',
+  );
+  await Deno.writeTextFile(
+    join(src, "mod.ts"),
+    'const plugin: Deno.lint.Plugin = { name: "fixture", rules: {} };\nexport default plugin;\n',
+  );
+  await Deno.writeTextFile(join(directory, "domain.ts"), domainSource);
+};
+
+const runVerifyScript = async (
+  directory: string,
+  options: Readonly<{
+    cwd?: string;
+    env?: Readonly<Record<string, string>>;
+  }> = {},
+) => {
+  const child = new Deno.Command(Deno.execPath(), {
+    args: [
+      "run",
+      "--quiet",
+      "--allow-read",
+      "--allow-run=deno",
+      verifyScript,
+    ],
+    cwd: options.cwd,
+    env: options.env,
+    stdin: "piped",
+    stdout: "piped",
+    stderr: "piped",
+  }).spawn();
+  const writer = child.stdin.getWriter();
+  await writer.write(new TextEncoder().encode(stopInput(directory)));
+  await writer.close();
+  return await child.output();
 };
 
 Deno.test("agent hook: validates the complete Stop input boundary", () => {
@@ -188,44 +233,93 @@ Deno.test("agent hook: paths with spaces and process failures stay redacted", as
     stopInput(`${directory}/src`),
     fake.capabilities,
   );
-  assertEquals("decision" in response ? response.decision : undefined, "block");
+  assertEquals(response, {
+    continue: false,
+    stopReason:
+      "Light FP validation could not start deno lint. Check that deno is available on PATH and allowed by the hook configuration.",
+  });
   assertEquals(JSON.stringify(response).includes(directory), false);
   assertEquals(fake.lintDirectories, [directory]);
+});
+
+Deno.test("agent hook: rejected lint capability becomes a process failure", async () => {
+  const fake = fakeCapabilities({
+    "/work/repo/deno.json":
+      '{"name":"@light-fp/deno-lint-plugin","lint":{"plugins":["./src/mod.ts"]}}',
+  });
+  const response = await verifyStop(stopInput("/work/repo"), {
+    ...fake.capabilities,
+    runLint: () => Promise.reject(new Error("secret process detail")),
+  });
+  assertEquals(response, {
+    continue: false,
+    stopReason:
+      "Light FP validation could not start deno lint. Check that deno is available on PATH and allowed by the hook configuration.",
+  });
+  assertEquals(
+    JSON.stringify(response).includes("secret process detail"),
+    false,
+  );
+});
+
+Deno.test("agent hook: invokes the PATH-resolved deno granted by its permissions", async () => {
+  const directory = await Deno.makeTempDir({ prefix: "light fp deno shim " });
+  try {
+    const bin = join(directory, "bin");
+    await Deno.mkdir(bin);
+    const shim = Deno.build.os === "windows"
+      ? join(bin, "deno.cmd")
+      : join(bin, "deno");
+    await Deno.writeTextFile(
+      shim,
+      Deno.build.os === "windows" ? "@exit /b 0\r\n" : "#!/bin/sh\nexit 0\n",
+      { mode: 0o755 },
+    );
+    await writeLocalPluginFixture(directory, "export const = 1;\n");
+
+    const output = await runVerifyScript(directory, {
+      cwd: directory,
+      env: { PATH: `${bin}${delimiter}${Deno.env.get("PATH") ?? ""}` },
+    });
+    assertEquals(output.code, 0, decoder.decode(output.stderr));
+    assertEquals(decoder.decode(output.stdout), "{}");
+  } finally {
+    await Deno.remove(directory, { recursive: true });
+  }
+});
+
+Deno.test("agent hook: missing PATH deno reports a process failure", async () => {
+  const directory = await Deno.makeTempDir({
+    prefix: "light fp missing deno ",
+  });
+  try {
+    const bin = join(directory, "bin");
+    await Deno.mkdir(bin);
+    await writeLocalPluginFixture(directory, "export const value = 1;\n");
+
+    const output = await runVerifyScript(directory, {
+      env: { PATH: bin },
+    });
+    assertEquals(output.code, 0, decoder.decode(output.stderr));
+    assertEquals(
+      JSON.parse(decoder.decode(output.stdout)),
+      {
+        continue: false,
+        stopReason:
+          "Light FP validation could not start deno lint. Check that deno is available on PATH and allowed by the hook configuration.",
+      },
+    );
+  } finally {
+    await Deno.remove(directory, { recursive: true });
+  }
 });
 
 Deno.test("agent hook: real protocol works with the registered permissions", async () => {
   const directory = await Deno.makeTempDir({ prefix: "light fp agent hook " });
   try {
-    await Deno.mkdir(join(directory, "src"));
-    await Deno.writeTextFile(
-      join(directory, "deno.json"),
-      '{"name":"@light-fp/deno-lint-plugin","lint":{"plugins":["./src/mod.ts"]}}',
-    );
-    await Deno.writeTextFile(
-      join(directory, "src", "mod.ts"),
-      'const plugin: Deno.lint.Plugin = { name: "fixture", rules: {} };\nexport default plugin;\n',
-    );
-    await Deno.writeTextFile(
-      join(directory, "domain.ts"),
-      "export const value = 1;\n",
-    );
+    await writeLocalPluginFixture(directory, "export const value = 1;\n");
 
-    const child = new Deno.Command(Deno.execPath(), {
-      args: [
-        "run",
-        "--quiet",
-        "--allow-read",
-        "--allow-run=deno",
-        verifyScript,
-      ],
-      stdin: "piped",
-      stdout: "piped",
-      stderr: "piped",
-    }).spawn();
-    const writer = child.stdin.getWriter();
-    await writer.write(new TextEncoder().encode(stopInput(directory)));
-    await writer.close();
-    const output = await child.output();
+    const output = await runVerifyScript(directory);
     assertEquals(output.code, 0, decoder.decode(output.stderr));
     assertEquals(decoder.decode(output.stdout), "{}");
   } finally {
