@@ -1,0 +1,4 @@
+# Demo artifacts and recordings stay local.
+/demos/
+
+.DS_Store

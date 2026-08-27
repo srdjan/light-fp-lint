@@ -44,3 +44,11 @@ export {
   requireIgnoreReason,
 };
 export { type Layer, layerOf } from "./layer.ts";
+export {
+  type Baseline,
+  compare,
+  type CountDiagnostics,
+  explain,
+  measure,
+  type Verdict,
+} from "./ratchet.ts";

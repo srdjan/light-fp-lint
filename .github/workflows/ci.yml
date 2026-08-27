@@ -1,0 +1,26 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          # The lint plugin API landed in 2.2 and is still marked experimental.
+          deno-version: v2.x
+
+      # Each of these guards a defect that once shipped:
+      # fmt    - keeps the diff honest
+      # check  - a rule typed against a symbol that does not exist fails here
+      # lint   - the plugin lints its own source, so one that cannot load fails
+      # test   - rule behavior, fixes, layer resolution, and the example corpus
+      - run: deno task ci
+
+      - run: deno publish --dry-run

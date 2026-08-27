@@ -300,11 +300,36 @@ through. Two orders that do work:
 one at a time as you clean them. The pragma list shrinks as adoption grows, and
 `grep` shows exactly how far along you are.
 
-**By ratchet.** Freeze today's count and forbid new violations. `runPlugin`
-works inside `deno test`, where file access is normal, so a test can walk
-`src/`, count diagnostics per file, and compare against a committed baseline.
-New violations fail; a reduced count fails too, asking you to tighten the
-baseline, so progress cannot silently regress.
+**By ratchet.** Freeze today's count and forbid new violations. The plugin
+exports the comparison, and you supply the counting:
+
+```ts
+import plugin, {
+  compare,
+  explain,
+  measure,
+} from "jsr:@light-fp/deno-lint-plugin";
+import baseline from "./lint-baseline.json" with { type: "json" };
+
+const count = (path: string, source: string) =>
+  Deno.lint.runPlugin(plugin, path, source).length;
+
+Deno.test("lint debt does not grow", async () => {
+  const verdict = compare(baseline, measure(count, await readSources("src")));
+  if (verdict._tag !== "Unchanged") throw new Error(explain(verdict));
+});
+```
+
+New violations fail. A reduced count fails too, asking you to tighten the
+baseline, so ground that was won cannot be lost again unnoticed. `runPlugin`
+works inside `deno test`, where file access is ordinary, which is why the
+ratchet lives there rather than in a rule: a rule cannot hold state between
+files, and a plugin reading a baseline from disk would lint differently in the
+editor than in CI.
+
+`measure` takes the counter as a parameter rather than calling `runPlugin`
+itself, so the comparison stays pure and the effect stays at the edge. See
+`tests/ratchet_test.ts` for the full version.
 
 ## Limits
 
