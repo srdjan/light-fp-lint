@@ -1,7 +1,7 @@
 // Intermediate API example (after): the domain returns an HTTP plan instead of performing IO.
 // Benefits:
-// - Pure request builders make it trivial to unit test headers and payloads.
-// - Result types ensure adapters must acknowledge error cases.
+// - Request builders return data rather than calling an adapter directly.
+// - Result types make the error cases explicit in the returned plan.
 // - The Http effect is branded so the call site knows it performs IO.
 // - Auto-fix friendly: running `deno lint --fix` on this file is a no-op because it already respects the rule hints.
 
@@ -99,7 +99,7 @@ export const planAuditPost = (
     (request) =>
       brandWithCapability("Http", cap, async (http) => {
         // handleThrow is the prelude's boundary: the throwing call goes in, a
-        // Result comes out, and the domain never catches anything itself.
+        // Result comes out, and this domain module does not catch the exception.
         const sent = await handleThrow(
           () => http.request(request),
           (cause): ApiError => ({

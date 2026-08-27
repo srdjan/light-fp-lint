@@ -4,10 +4,10 @@ Why this plugin is shaped the way it is. The [README](README.md) covers what the
 rules do; this file covers the decisions behind them, including the ones that
 were made under constraint rather than by preference.
 
-## Why can I not configure anything?
+## Why can I not configure rule options?
 
-Because Deno lint plugins cannot receive configuration, and pretending otherwise
-was the single largest defect in the previous version.
+Because Deno's lint configuration cannot pass options to a plugin, and
+pretending otherwise was the single largest defect in the previous version.
 
 `lint.plugins` accepts an array of strings. A tuple entry is not ignored, it is
 a hard parse error:
@@ -21,15 +21,14 @@ Caused by: invalid type: sequence, expected a string
 `report`, `getFilename()`, and `getSourceCode()`. There is no `options` field to
 read even if there were a way to set one.
 
-So a rule knows two things: the text of one file, and that file's name. Every
-decision has to come from those. Once that is accepted, the design follows: the
-layer is a property of the file, declared in the file.
+The rule context supplies the text of one file and that file's name. Layer
+resolution also reads `Deno.cwd()` to strip the launch directory from an
+absolute filename. It does not read a project configuration or resolve imports.
 
-The consolation is real. Per-file configuration is versioned, shows up in every
-diff, and answers questions a glob cannot. `grep -rn "@light-fp adapter" src/`
-enumerates every file that left the strict layer. There is no equivalent query
-for "which files did that `**/src/**/*.ts` pattern actually match, and did
-anyone notice when it stopped matching".
+Per-file configuration is versioned and shows up in diffs.
+`grep -rn "@light-fp adapter" src/` enumerates explicit adapter pragmas. It does
+not include test files, adapters inferred from path names, or `lint.exclude`
+entries, so those need their own audit.
 
 ## Why does an unrecognised file default to the strict layer?
 
@@ -41,44 +40,44 @@ silently: no diagnostic, no warning, a green build, and nobody finds out until
 the first `Date.now()` reaches production behind a `Result` that was never
 checked.
 
-Failing closed inverts that. The same rename produces a wall of diagnostics,
-which is annoying for ten minutes and correct forever after. The cost is paid on
-the first run of an existing codebase, when entry points and scripts light up
-until they are marked. That is the same trade every strict tool makes.
+Failing closed inverts that. The same rename produces diagnostics until the
+files are classified deliberately. Existing codebases pay that cost on the first
+run, when entry points and scripts need adapter classification.
+
+An invalid or miscased pragma also stays in the strict layer. The
+`layer-boundary` rule reports the token, while the other domain rules continue
+to run.
 
 ## Why ban `try` as well as `throw`?
 
 Because the two together are what let the type checker take over.
 
-Banning `throw` alone leaves a gap: domain code that calls something throwing,
-catches it, and converts. That is a second, hand-rolled error path in every file
-that does it, and the previous rule set tried to police it with a return-type
-analysis that reported the same throw twice.
+Banning `throw` alone still permits each domain file to add its own explicit
+`try/catch` conversion. The previous rule set also tried to infer return types
+without the type information needed to do that reliably.
 
-Ban both and the analysis is unnecessary. A function that can neither throw nor
-catch has exactly one way to report failure: return it. `deno check` then
-propagates that type outward for free, which is a stronger guarantee than any
-lint rule could give, and it is the reason the rule is worth its strictness.
+Ban both syntactic forms and explicit domain failure has to be returned.
+`deno check` can then propagate that declared type. The rule cannot prove that
+an imported call does not throw, because lint plugins have no type or cross-file
+information.
 
-The catching still has to happen somewhere. It happens once, in the prelude's
-`handleThrow`, which is the only function in the codebase with a `catch` in it.
+The example application centralises expected catching in the prelude's
+`handleThrow`. Adapters may also catch. This repository's domain-layer
+`src/layer.ts` has one signed `no-throw` suppression around root discovery so it
+can tolerate hosts that deny cwd access.
 
 ## Why is discarding a value an error?
 
-Because "did you handle this `Result`?" is the question everyone wants and
-nobody can answer syntactically, and "did you throw a value away?" is a question
-that can be answered syntactically and turns out to be the same question.
+Because "did you handle this `Result`?" needs type information, while discarded
+call-like syntax is visible in one AST.
 
-Deciding whether an expression is a `Result` needs type information. The linter
-has none. But consider what a discarded value means inside a function that is
-already guaranteed pure by the other rules: either the call did nothing, in
-which case it is dead code, or it did something, in which case the purity
-guarantee was already broken. Both are defects. Neither requires knowing the
-type.
+The rule reports call, await, tagged-template, optional-call, and qualifying
+sequence expression statements inside functions, plus `void expr`. It does not
+report every arbitrary expression statement. An ignored call result is either
+dead code or a hidden effect, and neither requires knowing its type.
 
-The rule catches more than it was aimed at, which is the sign it was aimed
-correctly: ignored `Result` values, floating promises, and fire-and-forget
-effects are one violation, not three.
+That one syntactic check covers ignored `Result` values, floating promises, and
+fire-and-forget calls.
 
 `void expr` is reported too. An explicit discard is still a discard, and letting
 `void` through would turn the rule into a formality.
@@ -103,16 +102,15 @@ export const parseEmail = (raw: string): Result<ParseError, Email> =>
   raw.includes("@") ? ok(raw as Email) : err({ _tag: "NotAnEmail" });
 ```
 
-That cast is the whole point of the file. Every other cast to `Email` anywhere
-else in the codebase is a forgery, and is reported.
+That cast is the whole point of the file. In another unsuppressed domain file,
+`Email` is not locally declared, so the same cast is reported. Adapter and
+prelude files are outside `no-unsafe-cast`.
 
-The distinction the rule can actually draw is "is the target type declared in
-this file". It works because the style already colocates a brand with its
-constructor, and it fails for a codebase that centralises brands in one module
-and constructors in another. Such a codebase must colocate them or suppress the
-rule with a reason. This is the one place where the rule shapes the code rather
-than the other way round, and it is a deliberate trade: the alternative is
-either no brands or no rule.
+The distinction the rule draws is "is the target a top-level type alias or
+interface declared in this file". It works when a brand and its constructor are
+colocated. A type declared inside a function is not recognised. A codebase that
+centralises brands separately from constructors must colocate them or suppress
+the rule with a reason.
 
 ## Why not track where effect brands come from?
 
@@ -125,25 +123,27 @@ It cannot follow a value through a function call, an array, or another module,
 and any rename defeats it. What it can do is produce confident diagnostics that
 are sometimes wrong, which is worse than producing none.
 
-The guarantee it wanted is available a different way. Give the brand a
-non-exported `unique symbol`, and forging one requires a cast. Ban the cast, and
-the brand is unforgeable, enforced by the type checker rather than approximated
-by the linter. That is what `no-unsafe-cast` is for.
+A non-exported `unique symbol` prevents structural construction outside the
+defining module. Forging the brand elsewhere then needs a cast, and
+`no-unsafe-cast` reports that cast because the target type is not declared in
+the importing file.
 
 ## Why is `new` allowed?
 
 A blanket ban on `new` fires on `new Map()`, `new Set()`, `new URL()`,
-`new RegExp()`, and `new TextEncoder()`. All of them are deterministic value
-constructors, and all of them are ordinary in pure code.
+`new RegExp()`, and `new TextEncoder()`. This plugin treats those as value
+constructors rather than ambient effects.
 
 A rule whose diagnostics are usually wrong teaches people to suppress it, and a
 suppression habit is contagious: the next diagnostic gets suppressed too,
 whether or not it was right. Precision is not a nicety in a lint rule, it is
 what keeps the rule believed.
 
-The constructors that are genuinely effectful are named individually in
-`no-ambient-effects`: `new Date()` with no arguments reads the clock,
-`new WebSocket` opens a socket. `new Date(ms)` converts a number and is fine.
+The constructors that are treated as effectful are named individually in
+`no-ambient-effects`: zero-argument `new Date()` reads the clock, and the five
+platform constructors in the README reach external facilities. `new Date(ms)`
+converts a number and is fine. `pure-module` also permits a constructor at
+module scope, so `export const cache = new Map()` is not reported.
 
 This allowance applies inside functions. Construction at module scope is a
 different question: it runs during import, so `pure-module` reports it even when
@@ -170,21 +170,25 @@ later. Nobody can tell whether it was a considered exception or someone clearing
 a build, so nobody removes it, and it becomes permanent. A signed one can be
 judged, and often removed.
 
-The file-wide `deno-lint-ignore-file` is refused entirely, because a whole file
-leaving the gate is a layer decision. Make it a layer decision: a pragma, which
-one `grep` enumerates.
+`require-ignore-reason` reports bare file-wide suppressions and file-wide
+suppressions naming `light-fp` when the plugin receives their comments. The real
+CLI applies a bare `// deno-lint-ignore-file` before the plugin runs, so that
+form silences this rule along with every other rule. `Deno.lint.runPlugin` does
+not honor ignore comments and therefore sees it. Reviewers need a text check for
+the bare CLI hole; the preferred whole-file decision remains a layer pragma or a
+reviewed `lint.exclude` entry.
 
 ## Why do the examples have their own `deno.json`?
 
 The `.bad.ts` files are deliberately full of violations. Linting them as part of
 the repository's own gate would mean the repository never passes its own CI.
 
-Giving `examples/` its own configuration solves that and earns something extra:
-the file is a worked consumer setup, so anyone adopting the plugin can copy it.
-The corpus is verified by `tests/examples_test.ts` instead, which asserts that
-every `.good.ts` file is clean and every `.bad.ts` file is not. Documentation
-that is executed cannot drift from the code, which is exactly how the previous
-version came to describe rules it did not have.
+Giving `examples/` its own configuration keeps deliberate violations out of the
+repository's own lint task. The file is also a worked local-path setup for this
+unpublished checkout. `tests/examples_test.ts` pins the complete sorted
+diagnostic id list for every example file, including each duplicate and each
+zero-diagnostic file. Deleting a bad example or reducing it to one diagnostic
+now fails the test.
 
 ## Why does the plugin's own source carry adapter pragmas?
 
@@ -196,10 +200,11 @@ returns nothing, which `no-discarded-values` correctly flags, and it is driven
 by traversal it does not own. That is adapter-shaped work, and the pragma says
 so with a reason attached.
 
-`src/layer.ts` is different: it is pure logic over a string and an AST, and it
-holds as domain code with no exemption. That the gate can be turned on its own
-implementation, and that the part which should pass does pass, is the only
-evidence worth having that the rules are livable.
+`src/layer.ts` resolves as domain code. Root discovery performs one `Deno.cwd()`
+read inside `try/catch`, so the file carries two signed line suppressions. The
+real CLI honors them and reports the file clean. `Deno.lint.runPlugin` ignores
+them and reports `no-ambient-effects` plus `no-throw`; the ratchet records both
+as debt.
 
 ## Why are local, CI, and agent enforcement separate?
 

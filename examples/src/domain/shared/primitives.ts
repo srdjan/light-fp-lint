@@ -1,7 +1,7 @@
 // @light-fp prelude -- defines Result and handleThrow, so this is the one module
 // that is allowed to catch. Everything else consumes the Result it returns.
 // Shared helpers for the "good" examples so they remain concise and lint-friendly.
-// These helpers all live in domain space, so importing them keeps boundaries intact.
+// Domain modules can import this prelude without crossing an adapter boundary.
 
 export type Result<E, A> =
   | { readonly _tag: "Ok"; readonly value: A }

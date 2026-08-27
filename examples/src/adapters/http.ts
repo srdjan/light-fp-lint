@@ -1,4 +1,4 @@
-// HTTP adapter stub: translates request descriptors into real fetch calls.
+// HTTP adapter stub: returns table-driven responses for request descriptors.
 //
 // The stub answers from a table rather than reaching the network, so nothing
 // here awaits. The port still promises a promise, so each response says so with

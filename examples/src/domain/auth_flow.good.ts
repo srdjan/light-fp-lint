@@ -1,7 +1,7 @@
 // Simple auth example (after): passes all Light FP rules.
 // Benefits:
 // - Testable: `planLogin` is a pure function that returns a branded IO plan.
-// - Type safe: readonly types and explicit `Result` make failures impossible to ignore.
+// - Type safe: readonly types and explicit `Result` make failures visible.
 // - Clear boundary: the domain no longer imports adapters; capabilities are provided as parameters.
 // - Self-documenting: the `AuthIO` brand makes side effects visible to the reader.
 // - Auto-fix ready: the plugin has nothing to rewrite here, so `deno lint --fix` confirms the file stays clean.
@@ -152,5 +152,5 @@ export const planLogin = (
       ),
   );
 
-// Tests stub the ports with fakes and assert on the returned AuthIO effect.
-// Production adapters keep ownership of actual IO, so the domain remains pure and deterministic.
+// Callers can supply fake ports when they execute the returned AuthIO effect.
+// This module imports no adapter implementation.

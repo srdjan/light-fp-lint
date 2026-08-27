@@ -2,7 +2,7 @@
 // Benefits:
 // - Clear boundary: adapters implement `UserRepositoryPort`; domain only relies on the interface.
 // - No mutation or classes; everything is readonly for safer refactors.
-// - Errors surface as `Result`, so callers cannot forget to handle them.
+// - Errors surface as `Result`, so callers can inspect the failure branch.
 // - Auto-fix tip: this structure already matches the recommended type alias style, so --fix reports no changes.
 
 import {

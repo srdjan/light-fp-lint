@@ -1,8 +1,8 @@
 // Beginner validation example (after): pure transformations with explicit Result.
 // Highlights:
-// - `Result` ensures callers handle validation errors explicitly.
+// - `Result` exposes validation errors explicitly.
 // - Readonly types prevent accidental mutation.
-// - No `new` or top-level effects; clock access is deferred via an IO plan.
+// - Deterministic constructors stay available; clock access is deferred via an IO plan.
 // - When run with `--fix`, the linter keeps this file unchanged because it already matches the recommended style.
 
 import {

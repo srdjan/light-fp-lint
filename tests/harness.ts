@@ -5,6 +5,8 @@ import plugin from "../src/mod.ts";
 export const DOMAIN = "/repo/src/domain/sample.ts";
 export const ADAPTER = "/repo/src/adapters/sample.ts";
 
+const RULE_IDS = Object.keys(plugin.rules).toSorted();
+
 export type Case = {
   /** What the case demonstrates, used as the failure message. */
   readonly name: string;
@@ -25,14 +27,30 @@ const run = (source: string, filename: string): readonly string[] =>
  * asserted exactly: a case that fires twice is as wrong as one that never fires.
  */
 export const check = (rule: string, cases: readonly Case[]) => {
+  if (!RULE_IDS.includes(rule)) {
+    throw new Error(
+      `Unknown light-fp rule id "${rule}". Known rule ids: ${
+        RULE_IDS.join(", ")
+      }`,
+    );
+  }
+
+  for (const testCase of cases) {
+    const mismatched = testCase.expect.find((id) => id !== rule);
+    if (mismatched) {
+      throw new Error(
+        `Case "${testCase.name}" belongs to light-fp/${rule} but expects light-fp/${mismatched}`,
+      );
+    }
+  }
+
   for (const testCase of cases) {
     Deno.test(`${rule}: ${testCase.name}`, () => {
       const filename = testCase.filename ?? DOMAIN;
       const actual = run(testCase.source, filename).filter((id) => id === rule);
-      const expected = testCase.expect.filter((id) => id === rule);
-      if (actual.length === expected.length) return;
+      if (actual.length === testCase.expect.length) return;
       throw new Error(
-        `expected ${expected.length} light-fp/${rule} diagnostic(s), got ${actual.length}\n` +
+        `expected ${testCase.expect.length} light-fp/${rule} diagnostic(s), got ${actual.length}\n` +
           `file: ${filename}\n--- source ---\n${testCase.source}\n--- all diagnostics ---\n` +
           `${run(testCase.source, filename).join(", ") || "(none)"}`,
       );
