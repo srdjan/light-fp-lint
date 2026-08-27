@@ -14,7 +14,10 @@ const onboardingPorts = {
   repo: inMemoryRepo,
 };
 
-const demoCredentials: Credentials = { email: "admin@example.com", password: "SuperSecurePass12" };
+const demoCredentials: Credentials = {
+  email: "admin@example.com",
+  password: "SuperSecurePass12",
+};
 
 async function main() {
   const plan = planOnboarding(onboardingPorts, demoCredentials);
@@ -34,4 +37,3 @@ async function main() {
 
 // Auto-fix benefit: adding `--fix` keeps import order stable and removes unused ports automatically.
 main();
-

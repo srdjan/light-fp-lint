@@ -19,7 +19,10 @@ export async function requestUserProfile(token: string) {
   return json;
 }
 
-export async function postAuditEvent(token: string, event: Record<string, unknown>) {
+export async function postAuditEvent(
+  token: string,
+  event: Record<string, unknown>,
+) {
   const res = await fetch("https://api.example.com/audit", {
     method: "POST",
     headers: { authorization: `Bearer ${token}` },
@@ -29,4 +32,3 @@ export async function postAuditEvent(token: string, event: Record<string, unknow
     throw new Error(`Audit failed: ${res.status}`);
   }
 }
-

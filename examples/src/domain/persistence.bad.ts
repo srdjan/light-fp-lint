@@ -17,10 +17,13 @@ export async function insertUser(record: UserRecord): Promise<number> {
   if (!record.email.includes("@")) {
     throw new Error("Invalid email"); // Result rule violation.
   }
-  const result = await client.query(`INSERT INTO ${TABLE} (email, roles) VALUES ($1, $2) RETURNING id`, [
-    record.email,
-    JSON.stringify(record.roles),
-  ]);
+  const result = await client.query(
+    `INSERT INTO ${TABLE} (email, roles) VALUES ($1, $2) RETURNING id`,
+    [
+      record.email,
+      JSON.stringify(record.roles),
+    ],
+  );
   if (!result.rows?.[0]) {
     throw new Error("Insert failed"); // Hidden coupling to driver.
   }
@@ -29,8 +32,9 @@ export async function insertUser(record: UserRecord): Promise<number> {
 }
 
 export async function listAdmins(): Promise<UserRecord[]> {
-  const result = await client.query(`SELECT * FROM ${TABLE} WHERE roles ? 'admin'`);
+  const result = await client.query(
+    `SELECT * FROM ${TABLE} WHERE roles ? 'admin'`,
+  );
   console.log("Loaded admins", result.rowCount); // Side effect in domain.
   return result.rows;
 }
-

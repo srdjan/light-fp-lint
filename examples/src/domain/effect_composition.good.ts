@@ -5,32 +5,67 @@
 // - Each capability stays behind a clear port, making the flow easy to test with fakes.
 // - Auto-fix confidence: this import order and type usage line up with the plugin's fixes, so --fix confirms the setup.
 
-import { brandWithCapability, err, ok, type Result, type WithCapability } from "./shared/primitives.ts";
-import { planLogin, type AuthError, type AuthPlan, type Credentials, type LoginPorts } from "./auth_flow.good.ts";
-import { planProfileFetch, type ApiError, type HttpCapability, type HttpEffect } from "./api_orchestration.good.ts";
 import {
-  planInsertUser,
+  brandWithCapability,
+  err,
+  ok,
+  type Result,
+  type WithCapability,
+} from "./shared/primitives.ts";
+import {
+  type AuthError,
+  type AuthPlan,
+  type Credentials,
+  type LoginPorts,
+  planLogin,
+} from "./auth_flow.good.ts";
+import {
+  type ApiError,
+  type HttpCapability,
+  type HttpEffect,
+  planProfileFetch,
+} from "./api_orchestration.good.ts";
+import {
   type PersistenceError,
+  planInsertUser,
   type UserRecord,
   type UserRepositoryPort,
 } from "./persistence.good.ts";
 
-type Profile = Readonly<{ readonly email: string; readonly roles: readonly string[] }>;
+type Profile = Readonly<
+  { readonly email: string; readonly roles: readonly string[] }
+>;
+
+// A type guard narrows once, in one place, and gives the rest of the function a
+// real type. A cast would assert the same thing without checking it.
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
 
 const decodeProfile = (payload: unknown): Result<ApiError, Profile> => {
-  if (typeof payload !== "object" || payload === null) {
-    return err({ type: "UnexpectedResponse", message: "Profile payload missing" });
+  if (!isRecord(payload)) {
+    return err({
+      type: "UnexpectedResponse",
+      message: "Profile payload missing",
+    });
   }
-  const maybe = payload as Record<string, unknown>;
-  const email = maybe["email"];
-  const roles = maybe["roles"];
+  const email = payload["email"];
+  const roles = payload["roles"];
   if (typeof email !== "string" || !email.includes("@")) {
-    return err({ type: "UnexpectedResponse", message: "Profile missing email" });
+    return err({
+      type: "UnexpectedResponse",
+      message: "Profile missing email",
+    });
   }
   if (!Array.isArray(roles)) {
-    return err({ type: "UnexpectedResponse", message: "Profile missing roles" });
+    return err({
+      type: "UnexpectedResponse",
+      message: "Profile missing roles",
+    });
   }
-  return ok({ email, roles: roles.filter((role): role is string => typeof role === "string") });
+  return ok({
+    email,
+    roles: roles.filter((role): role is string => typeof role === "string"),
+  });
 };
 
 export type CompositeError = AuthError | ApiError | PersistenceError;
@@ -41,9 +76,15 @@ type OnboardingPorts = Readonly<{
   readonly repo: UserRepositoryPort;
 }>;
 
-type OnboardingSuccess = Readonly<{ readonly token: string; readonly storedUserId: number }>;
+type OnboardingSuccess = Readonly<
+  { readonly token: string; readonly storedUserId: number }
+>;
 
-export type OnboardingEffect = WithCapability<"Onboarding", OnboardingPorts, Result<CompositeError, OnboardingSuccess>>;
+export type OnboardingEffect = WithCapability<
+  "Onboarding",
+  OnboardingPorts,
+  Result<CompositeError, OnboardingSuccess>
+>;
 
 export const planOnboarding = (
   ports: OnboardingPorts,
@@ -58,7 +99,10 @@ export const planOnboarding = (
       const loginOutcome = await loginPlan.run();
       if (loginOutcome._tag === "Err") return loginOutcome;
 
-      const profilePlanResult: Result<ApiError, HttpEffect> = planProfileFetch(cap.http, loginOutcome.value.token);
+      const profilePlanResult: Result<ApiError, HttpEffect> = planProfileFetch(
+        cap.http,
+        loginOutcome.value.token,
+      );
       if (profilePlanResult._tag === "Err") return profilePlanResult;
 
       const profileResponse = await profilePlanResult.value.run();
@@ -68,14 +112,20 @@ export const planOnboarding = (
       const profile = decodeProfile(profileJson);
       if (profile._tag === "Err") return profile;
 
-      const userRecord: UserRecord = { email: profile.value.email, roles: profile.value.roles };
+      const userRecord: UserRecord = {
+        email: profile.value.email,
+        roles: profile.value.roles,
+      };
       const insertPlanResult = planInsertUser(cap.repo, userRecord);
       if (insertPlanResult._tag === "Err") return insertPlanResult;
 
       const insertOutcome = await insertPlanResult.value.run();
       if (insertOutcome._tag === "Err") return insertOutcome;
 
-      return ok({ token: loginOutcome.value.token, storedUserId: insertOutcome.value });
+      return ok({
+        token: loginOutcome.value.token,
+        storedUserId: insertOutcome.value,
+      });
     }),
   );
 };

@@ -12,8 +12,20 @@ type StoredUser = {
 };
 
 const USERS: StoredUser[] = [
-  { id: 1, email: "admin@example.com", passwordHash: "hash:SuperSecurePass12", roles: ["admin"], isLocked: false },
-  { id: 2, email: "user@example.com", passwordHash: "hash:UserPassword987", roles: ["user"], isLocked: false },
+  {
+    id: 1,
+    email: "admin@example.com",
+    passwordHash: "hash:SuperSecurePass12",
+    roles: ["admin"],
+    isLocked: false,
+  },
+  {
+    id: 2,
+    email: "user@example.com",
+    passwordHash: "hash:UserPassword987",
+    roles: ["user"],
+    isLocked: false,
+  },
 ];
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));

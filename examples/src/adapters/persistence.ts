@@ -1,6 +1,10 @@
 // Persistence adapter: keeps data in memory for demonstration purposes.
 
-import type { UserRecord, UserRepositoryPort, UserRow } from "../domain/persistence.good.ts";
+import type {
+  UserRecord,
+  UserRepositoryPort,
+  UserRow,
+} from "../domain/persistence.good.ts";
 
 let nextId = 3;
 const rows: UserRow[] = [

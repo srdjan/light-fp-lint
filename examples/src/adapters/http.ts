@@ -1,6 +1,10 @@
 // HTTP adapter stub: translates request descriptors into real fetch calls.
 
-import type { HttpCapability, HttpRequest, HttpResponse } from "../domain/api_orchestration.good.ts";
+import type {
+  HttpCapability,
+  HttpRequest,
+  HttpResponse,
+} from "../domain/api_orchestration.good.ts";
 
 export const httpCapability: HttpCapability = {
   async request(request) {

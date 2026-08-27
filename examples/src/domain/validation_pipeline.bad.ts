@@ -31,7 +31,8 @@ export function normalizeForm(raw: any): SignupForm { // `any` bypasses type saf
 
 export function toPersistenceRecord(form: SignupForm): Record<string, unknown> {
   // Rule violation: domain reaching for `Date.now()` and mutating incoming object.
-  form.birthDate = form.birthDate instanceof Date ? form.birthDate : new Date(form.birthDate ?? Date.now());
+  form.birthDate = form.birthDate instanceof Date
+    ? form.birthDate
+    : new Date(form.birthDate ?? Date.now());
   return { ...form, createdAt: Date.now() };
 }
-

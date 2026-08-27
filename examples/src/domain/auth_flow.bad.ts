@@ -33,7 +33,10 @@ export class AuthService { // Rule violation: classes bring implicit state and `
     }
     const payload = await response.json();
     this.currentUserId = payload.user.id;
-    const token = await issueToken({ userId: this.currentUserId, roles: payload.user.roles });
+    const token = await issueToken({
+      userId: this.currentUserId,
+      roles: payload.user.roles,
+    });
     lastIssuedAt = Date.now(); // Hidden mutable write.
     issuedTokens.push(token); // Mutates shared state.
     console.log("Issued token", token); // Side effect that the linter suggests moving to adapters.
@@ -41,7 +44,9 @@ export class AuthService { // Rule violation: classes bring implicit state and `
   }
 
   async ensureAdmin(token: string): Promise<boolean> {
-    const result = await fetch(`${this.endpoint}/validate`, { headers: { authorization: `Bearer ${token}` } });
+    const result = await fetch(`${this.endpoint}/validate`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
     const json = await result.json();
     if (!json.user?.roles?.includes("admin")) {
       throw new Error("not authorized"); // Another `throw` in domain logic.
@@ -51,4 +56,3 @@ export class AuthService { // Rule violation: classes bring implicit state and `
 }
 
 export const authService = new AuthService("https://example.com"); // Rule violation: `new` at top level in domain code.
-

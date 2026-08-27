@@ -5,7 +5,15 @@
 // - The Http effect is branded so the call site knows it performs IO.
 // - Auto-fix friendly: running `deno lint --fix` on this file is a no-op because it already respects the rule hints.
 
-import { brandWithCapability, err, map, ok, type Result, type WithCapability } from "./shared/primitives.ts";
+import {
+  brandWithCapability,
+  err,
+  handleThrow,
+  map,
+  ok,
+  type Result,
+  type WithCapability,
+} from "./shared/primitives.ts";
 
 type HttpMethod = "GET" | "POST";
 
@@ -21,14 +29,20 @@ export type HttpResponse = Readonly<{
   readonly json: () => Promise<unknown>;
 }>;
 
-export type HttpCapability = Readonly<{ readonly request: (input: HttpRequest) => Promise<HttpResponse> }>;
+export type HttpCapability = Readonly<
+  { readonly request: (input: HttpRequest) => Promise<HttpResponse> }
+>;
 
 export type ApiError =
   | { readonly type: "Unauthorized"; readonly message: string }
   | { readonly type: "Network"; readonly message: string }
   | { readonly type: "UnexpectedResponse"; readonly message: string };
 
-export type HttpEffect = WithCapability<"Http", HttpCapability, Result<ApiError, HttpResponse>>;
+export type HttpEffect = WithCapability<
+  "Http",
+  HttpCapability,
+  Result<ApiError, HttpResponse>
+>;
 
 const bearer = (token: string): string => `Bearer ${token}`;
 
@@ -58,7 +72,10 @@ const buildAuditRequest = (
       body: { ...event, issuedAt },
     });
 
-export const planProfileFetch = (cap: HttpCapability, token: string): Result<ApiError, HttpEffect> =>
+export const planProfileFetch = (
+  cap: HttpCapability,
+  token: string,
+): Result<ApiError, HttpEffect> =>
   map(
     buildProfileRequest(token),
     (request) =>
@@ -81,14 +98,22 @@ export const planAuditPost = (
     buildAuditRequest(token, event, issuedAt),
     (request) =>
       brandWithCapability("Http", cap, async (http) => {
-        try {
-          const response = await http.request(request);
-          if (response.status >= 400) {
-            return err({ type: "UnexpectedResponse", message: `Adapter returned ${response.status}` });
-          }
-          return ok(response);
-        } catch (cause) {
-          return err({ type: "Network", message: cause instanceof Error ? cause.message : String(cause) });
+        // handleThrow is the prelude's boundary: the throwing call goes in, a
+        // Result comes out, and the domain never catches anything itself.
+        const sent = await handleThrow(
+          () => http.request(request),
+          (cause): ApiError => ({
+            type: "Network",
+            message: cause instanceof Error ? cause.message : String(cause),
+          }),
+        );
+        if (sent._tag === "Err") return sent;
+        if (sent.value.status >= 400) {
+          return err({
+            type: "UnexpectedResponse",
+            message: `Adapter returned ${sent.value.status}`,
+          });
         }
+        return ok(sent.value);
       }),
   );

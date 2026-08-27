@@ -5,7 +5,15 @@
 // - Errors surface as `Result`, so callers cannot forget to handle them.
 // - Auto-fix tip: this structure already matches the recommended type alias style, so --fix reports no changes.
 
-import { brandWithCapability, err, map, ok, type Result, type WithCapability } from "./shared/primitives.ts";
+import {
+  brandWithCapability,
+  err,
+  handleThrow,
+  map,
+  ok,
+  type Result,
+  type WithCapability,
+} from "./shared/primitives.ts";
 
 export type UserRecord = Readonly<{
   readonly email: string;
@@ -20,37 +28,58 @@ export type UserRepositoryPort = Readonly<{
 }>;
 
 export type PersistenceError =
-  | { readonly type: "Validation"; readonly field: "email"; readonly message: string }
+  | {
+    readonly type: "Validation";
+    readonly field: "email";
+    readonly message: string;
+  }
   | { readonly type: "Driver"; readonly message: string };
 
-export type InsertEffect = WithCapability<"Persistence", UserRepositoryPort, Result<PersistenceError, number>>;
-export type ListEffect = WithCapability<"Persistence", UserRepositoryPort, Result<PersistenceError, readonly UserRow[]>>;
+export type InsertEffect = WithCapability<
+  "Persistence",
+  UserRepositoryPort,
+  Result<PersistenceError, number>
+>;
+export type ListEffect = WithCapability<
+  "Persistence",
+  UserRepositoryPort,
+  Result<PersistenceError, readonly UserRow[]>
+>;
 
-const ensureEmail = (record: UserRecord): Result<PersistenceError, UserRecord> =>
+const ensureEmail = (
+  record: UserRecord,
+): Result<PersistenceError, UserRecord> =>
   record.email.includes("@")
     ? ok(record)
     : err({ type: "Validation", field: "email", message: "Must contain @" });
 
-export const planInsertUser = (repo: UserRepositoryPort, record: UserRecord): Result<PersistenceError, InsertEffect> =>
+export const planInsertUser = (
+  repo: UserRepositoryPort,
+  record: UserRecord,
+): Result<PersistenceError, InsertEffect> =>
   map(
     ensureEmail(record),
     (validRecord) =>
-      brandWithCapability("Persistence", repo, async (cap) => {
-        const id = await cap.insert(validRecord).catch((cause: unknown) =>
-          err({ type: "Driver", message: cause instanceof Error ? cause.message : String(cause) })
-        );
-        return typeof id === "number" ? ok(id) : id;
-      }),
+      brandWithCapability("Persistence", repo, (cap) =>
+        handleThrow(
+          () => cap.insert(validRecord),
+          (cause): PersistenceError => ({
+            type: "Driver",
+            message: cause instanceof Error ? cause.message : String(cause),
+          }),
+        )),
   );
 
-export const planListAdmins = (repo: UserRepositoryPort): Result<PersistenceError, ListEffect> =>
+export const planListAdmins = (
+  repo: UserRepositoryPort,
+): Result<PersistenceError, ListEffect> =>
   ok(
-    brandWithCapability("Persistence", repo, async (cap) => {
-      try {
-        const admins = await cap.findByRole("admin");
-        return ok(admins);
-      } catch (cause) {
-        return err({ type: "Driver", message: cause instanceof Error ? cause.message : String(cause) });
-      }
-    }),
+    brandWithCapability("Persistence", repo, (cap) =>
+      handleThrow(
+        () => cap.findByRole("admin"),
+        (cause): PersistenceError => ({
+          type: "Driver",
+          message: cause instanceof Error ? cause.message : String(cause),
+        }),
+      )),
   );

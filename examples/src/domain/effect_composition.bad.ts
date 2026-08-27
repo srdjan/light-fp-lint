@@ -9,7 +9,9 @@ import { insertUser } from "./persistence.bad.ts";
 
 let onboardingCount = 0; // Mutable shared state.
 
-export async function onboardNewUser(credentials: { email: string; password: string }) {
+export async function onboardNewUser(
+  credentials: { email: string; password: string },
+) {
   const token = await authService.login(credentials); // Throws on failure, so callers must remember try/catch.
   const profile = await requestUserProfile(token); // Another throw path.
   await insertUser({
@@ -20,4 +22,3 @@ export async function onboardNewUser(credentials: { email: string; password: str
   console.log("Onboarded users:", onboardingCount); // Side effect tangled with orchestration.
   return profile;
 }
-
