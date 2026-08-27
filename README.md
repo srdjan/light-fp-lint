@@ -8,10 +8,11 @@ A Deno lint plugin for Light Functional Programming in TypeScript: module-scope
 purity checks, explicit error-as-value conventions, readonly data declarations,
 and a hexagonal boundary between domain and adapters.
 
-> **Publication status:** `@light-fp/deno-lint-plugin` is not published to JSR.
-> The JSR specifiers and hook commands below describe the intended interface
-> after the first publish; they do not work today. This checkout uses the local
-> plugin path instead.
+> **Publication status:** `@srdjan/light-fp-lint` is not yet published to JSR.
+> The JSR specifiers and hook commands below describe the interface after the
+> first publish; until then they do not resolve, and this checkout uses the
+> local plugin path instead. Delete this note in the same commit as the first
+> publish.
 
 ## Contents
 
