@@ -1,7 +1,7 @@
 // Effect discipline core rules (extracted and adapted)
 import type { TSESTree } from "npm:@typescript-eslint/types@6.21.0";
 import { normalizeOptions, toPosix } from "../util/options.ts";
-import { getCalleeName, isReadonlyArrayType, typeContainsEffectBrand, unwrapExpression } from "../util/ast.ts";
+import { expressionContainsEffectAssertion, getCalleeName, typeContainsEffectBrand, unwrapExpression } from "../util/ast.ts";
 
 export const effectBrandOriginRule: Deno.lint.RuleModule = {
   meta: { docs: { description: "Ensure effect brands originate from authorized helpers.", recommended: true } },
@@ -58,6 +58,11 @@ export const effectBrandOriginRule: Deno.lint.RuleModule = {
         fn.type === "MethodDefinition" && (fn.value as any).returnType ? (fn.value as any).returnType.typeAnnotation :
         null;
       scopeStack.push({ returnType });
+      // An arrow with an expression body carries no ReturnStatement, so the
+      // visitor below never sees it. Check the body as the returned value.
+      if (fn.type === "ArrowFunctionExpression" && fn.body.type !== "BlockStatement") {
+        ensureInitializer(fn.body as TSESTree.Expression, returnType, fn.body);
+      }
     };
     const exitFunction = () => { scopeStack.pop(); };
 
@@ -110,21 +115,18 @@ export const noDirectEffectAssertionRule: Deno.lint.RuleModule = {
     if (options.allowedAssertionMatcher(filename)) return {};
     if (options.ignoreMatcher(filename)) return {};
 
+    const reportForgedBrand = (node: TSESTree.TSAsExpression | TSESTree.TSTypeAssertion) => {
+      if (!expressionContainsEffectAssertion(node, options.effectNames)) return;
+      context.report({
+        node,
+        message: "Do not forge an effect brand with a type assertion.",
+        hint: "Build the value with brand(), brandWithCapability(), or withCapability() so the effect has a traceable origin.",
+      });
+    };
+
     return {
-      TSAsExpression(node) {
-        // @ts-ignore
-        if (node.typeAnnotation && (node as any).typeAnnotation && (node as any).typeAnnotation.type && (node as any).typeAnnotation) {
-          // @ts-ignore
-          if ( (node as any).typeAnnotation && (node as any).typeAnnotation.type && (node as any).typeAnnotation ) {
-            // Fast path via util
-          }
-        }
-        // We rely on util function via dynamic import at report time:
-        // Simpler: re-check using source text parsing would be overkill; we accept a small false-negative rate.
-      },
-      TSTypeAssertion(node) {
-        // Same note as above.
-      },
+      TSAsExpression: reportForgedBrand,
+      TSTypeAssertion: reportForgedBrand,
     };
   },
 };

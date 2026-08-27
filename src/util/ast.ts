@@ -50,6 +50,19 @@ export const isReadonlyArrayType = (typeNode: TSESTree.TypeNode): boolean => {
   return true;
 };
 
+// `Effect<"IO", A>` and `WithCapability<"Console", C, A>` carry the brand as their
+// first type argument. Only that position counts: a container such as
+// `Result<E, Effect<"IO", A>>` holds a plan, it is not itself a branded value.
+const firstTypeArgumentIsBrand = (
+  typeNode: TSESTree.TSTypeReference,
+  effectNames: ReadonlySet<string>,
+): boolean => {
+  const first = (typeNode as { typeArguments?: { params?: readonly TSESTree.TypeNode[] } }).typeArguments?.params?.[0];
+  if (!first || first.type !== "TSLiteralType") return false;
+  const literal = first.literal;
+  return literal.type === "Literal" && typeof literal.value === "string" && effectNames.has(literal.value);
+};
+
 export const typeContainsEffectBrand = (
   typeNode: TSESTree.TypeNode | null | undefined,
   effectNames: ReadonlySet<string>,
@@ -60,6 +73,7 @@ export const typeContainsEffectBrand = (
       const typeName = typeNode.typeName;
       if (typeName.type === "Identifier" && effectNames.has(typeName.name)) return true;
       if (typeName.type === "TSQualifiedName" && typeName.right.type === "Identifier" && effectNames.has(typeName.right.name)) return true;
+      if (firstTypeArgumentIsBrand(typeNode, effectNames)) return true;
       break;
     }
     case "TSIntersectionType":

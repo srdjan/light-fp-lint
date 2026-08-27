@@ -1,6 +1,11 @@
 import { normalizeOptions, toPosix } from "../util/options.ts";
 
-const isTopLevel = (node: Deno.lint.Node) => (node as any).parent?.type === "Program";
+const FUNCTION_SCOPES = new Set([
+  "FunctionDeclaration",
+  "FunctionExpression",
+  "ArrowFunctionExpression",
+  "MethodDefinition",
+]);
 
 export const noTopLevelEffects: Deno.lint.RuleModule = {
   meta: { docs: { description: "No side-effects at module top level in domain files" } },
@@ -8,6 +13,13 @@ export const noTopLevelEffects: Deno.lint.RuleModule = {
     const opts = normalizeOptions(context.options?.[0]);
     const file = toPosix(context.filename ?? "");
     if (!opts.domainMatcher(file) || opts.adapterMatcher(file)) return {};
+
+    // An effect at module scope is always nested inside a declaration, so its
+    // direct parent is never `Program`. What marks it as deferred instead is an
+    // enclosing function: `const now = Date.now()` runs on import, whereas
+    // `const now = () => Date.now()` does not.
+    const isTopLevel = (node: Deno.lint.Node) =>
+      !context.sourceCode.getAncestors(node).some((ancestor) => FUNCTION_SCOPES.has(ancestor.type));
 
     return {
       CallExpression(node) {
