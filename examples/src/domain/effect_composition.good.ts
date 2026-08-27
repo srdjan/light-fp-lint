@@ -1,7 +1,7 @@
 // Advanced orchestration example (after): composes branded effects from smaller domain modules.
 // Benefits:
 // - Orchestrator remains pure; it simply returns a branded `Onboarding` effect.
-// - Composition uses `Result`, so each failure path is explicit.
+// - Composition uses `Result` for its declared failure paths.
 // - Each capability stays behind a clear port, making the flow easy to test with fakes.
 // - Auto-fix confidence: this import order and type usage line up with the plugin's fixes, so --fix confirms the setup.
 

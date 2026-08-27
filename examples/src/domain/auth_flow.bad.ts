@@ -1,58 +1,60 @@
 // Simple auth example (before): demonstrates what the linter flags.
-// - Violates `importsBoundary` by pulling adapters into the domain.
-// - Violates `noTopLevelEffects` with `Math.random()` and `Date.now()` at module scope.
-// - Violates `noNew`/`noThis` by relying on a class with mutable state.
-// - Violates `resultType` by throwing instead of returning `Result<E, A>`.
-// - Violates `interfaceVsType` (auto-fix hint) by using interface for data.
+// - `layer-boundary` reports the adapter import.
+// - `pure-module` and `no-ambient-effects` report the initializer calls.
+// - `no-oo` reports the class, parameter property, and each use of `this`.
+// - `no-throw` reports exceptions instead of `Result<E, A>` values.
+// - The data interface triggers `prefer-type-for-data` and `readonly-data`.
 
-import { hashPassword, issueToken } from "../adapters/auth.ts"; // Rule violation: domain importing adapter utilities.
+import { hashPassword, issueToken } from "../adapters/auth.ts"; // layer-boundary
 
-interface Credentials { // Rule violation: prefer `type` for data, the plugin offers an auto-fix to rewrite this.
-  email: string;
-  password: string;
+interface Credentials { // prefer-type-for-data
+  email: string; // readonly-data
+  password: string; // readonly-data
 }
 
-let lastIssuedAt = Date.now(); // Rule violation: top-level `Date.now()` hides effectful state.
-const randomSalt = Math.random().toString(36); // Rule violation: top-level randomness blocks determinism.
-const issuedTokens: string[] = []; // Hidden mutable global state makes testing flaky.
+let lastIssuedAt = Date.now(); // pure-module twice, no-ambient-effects
+const randomSalt = Math.random().toString(36); // pure-module, no-ambient-effects
+// Mutable module data is risky, but constructing this array is not reported.
+const issuedTokens: string[] = [];
 
-export class AuthService { // Rule violation: classes bring implicit state and `this`.
+export class AuthService { // no-oo
   private currentUserId: number | undefined;
 
-  constructor(private readonly endpoint: string) {}
+  constructor(private readonly endpoint: string) {} // no-oo
 
   async login(credentials: Credentials): Promise<string> {
-    // Rule violation: direct `fetch` call mixes IO and domain logic.
+    // no-ambient-effects reports fetch; no-oo reports this.
     const response = await fetch(`${this.endpoint}/login`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ ...credentials, salt: randomSalt }),
     });
     if (!response.ok) {
-      throw new Error("Invalid credentials"); // Rule violation: raw throw instead of returning a Result.
+      throw new Error("Invalid credentials"); // no-throw
     }
     const payload = await response.json();
-    this.currentUserId = payload.user.id;
+    this.currentUserId = payload.user.id; // no-oo
     const token = await issueToken({
-      userId: this.currentUserId,
+      userId: this.currentUserId, // no-oo
       roles: payload.user.roles,
     });
-    lastIssuedAt = Date.now(); // Hidden mutable write.
-    issuedTokens.push(token); // Mutates shared state.
-    console.log("Issued token", token); // Side effect that the linter suggests moving to adapters.
+    lastIssuedAt = Date.now(); // no-ambient-effects
+    issuedTokens.push(token); // no-discarded-values
+    console.log("Issued token", token); // no-ambient-effects, no-discarded-values
     return token;
   }
 
   async ensureAdmin(token: string): Promise<boolean> {
-    const result = await fetch(`${this.endpoint}/validate`, {
+    const result = await fetch(`${this.endpoint}/validate`, { // no-ambient-effects, no-oo
       headers: { authorization: `Bearer ${token}` },
     });
     const json = await result.json();
     if (!json.user?.roles?.includes("admin")) {
-      throw new Error("not authorized"); // Another `throw` in domain logic.
+      throw new Error("not authorized"); // no-throw
     }
     return true;
   }
 }
 
-export const authService = new AuthService("https://example.com"); // Rule violation: `new` at top level in domain code.
+// Local construction is allowed. The class declaration above is what no-oo reports.
+export const authService = new AuthService("https://example.com");

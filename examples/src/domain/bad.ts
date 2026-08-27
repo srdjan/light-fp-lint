@@ -1,5 +1,5 @@
-// A domain file that breaks most of the rules at once. Each comment names the
-// rule that reports the line above it. The paired good examples in this
+// A domain file that breaks most of the rules at once. Each trailing comment
+// names the rule that reports the same line. The paired good examples in this
 // directory show the same work done in the style the gate enforces.
 //
 // Do not run `deno lint --fix` over this file: the readonly and type-alias
@@ -17,7 +17,7 @@ export interface Data { // prefer-type-for-data: it carries data, so it is a typ
   readonly run: () => void;
 }
 
-export const now = Date.now(); // no-ambient-effects
+export const now = Date.now(); // no-ambient-effects, pure-module
 
 let requestCount = 0; // pure-module: module-level mutable state
 

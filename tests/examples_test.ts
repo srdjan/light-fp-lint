@@ -1,5 +1,6 @@
 import { assertEquals } from "@std/assert";
 import { fromFileUrl, join } from "@std/path";
+import plugin from "../src/mod.ts";
 import { diagnose } from "./harness.ts";
 
 const root = fromFileUrl(new URL("../examples/src", import.meta.url));
@@ -27,40 +28,117 @@ const collect = async (): Promise<
 
 const corpus = await collect();
 
-// The examples are the documentation. Pinning them here is what stops the docs
-// drifting away from what the rules do, which is how the previous rule set came
-// to advertise behavior it never had.
+// Exact per-file diagnostic multisets prevent examples from silently losing
+// documented violations.
 
-Deno.test("examples: every .good.ts file is clean", () => {
-  for (const [name, diagnostics] of corpus) {
-    if (!name.endsWith(".good.ts")) continue;
+const expectedDiagnostics: Readonly<Record<string, readonly string[]>> = {
+  "adapters/auth.ts": [],
+  "adapters/http.ts": [],
+  "adapters/persistence.ts": [],
+  "adapters/side.ts": [],
+  "domain/api_orchestration.bad.ts": [
+    "light-fp/no-ambient-effects",
+    "light-fp/no-ambient-effects",
+    "light-fp/no-ambient-effects",
+    "light-fp/no-ambient-effects",
+    "light-fp/no-discarded-values",
+    "light-fp/no-discarded-values",
+    "light-fp/no-throw",
+    "light-fp/no-throw",
+  ],
+  "domain/api_orchestration.good.ts": [],
+  "domain/auth_flow.bad.ts": [
+    "light-fp/layer-boundary",
+    "light-fp/no-ambient-effects",
+    "light-fp/no-ambient-effects",
+    "light-fp/no-ambient-effects",
+    "light-fp/no-ambient-effects",
+    "light-fp/no-ambient-effects",
+    "light-fp/no-ambient-effects",
+    "light-fp/no-discarded-values",
+    "light-fp/no-discarded-values",
+    "light-fp/no-oo",
+    "light-fp/no-oo",
+    "light-fp/no-oo",
+    "light-fp/no-oo",
+    "light-fp/no-oo",
+    "light-fp/no-oo",
+    "light-fp/no-throw",
+    "light-fp/no-throw",
+    "light-fp/prefer-type-for-data",
+    "light-fp/pure-module",
+    "light-fp/pure-module",
+    "light-fp/pure-module",
+    "light-fp/readonly-data",
+    "light-fp/readonly-data",
+  ],
+  "domain/auth_flow.good.ts": [],
+  "domain/bad.ts": [
+    "light-fp/layer-boundary",
+    "light-fp/no-ambient-effects",
+    "light-fp/no-discarded-values",
+    "light-fp/no-oo",
+    "light-fp/no-throw",
+    "light-fp/no-unsafe-cast",
+    "light-fp/prefer-type-for-data",
+    "light-fp/pure-module",
+    "light-fp/pure-module",
+    "light-fp/readonly-data",
+    "light-fp/readonly-data",
+    "light-fp/readonly-data",
+  ],
+  "domain/effect_composition.bad.ts": [
+    "light-fp/no-ambient-effects",
+    "light-fp/no-discarded-values",
+    "light-fp/no-discarded-values",
+    "light-fp/pure-module",
+  ],
+  "domain/effect_composition.good.ts": [],
+  "domain/persistence.bad.ts": [
+    "light-fp/layer-boundary",
+    "light-fp/no-ambient-effects",
+    "light-fp/no-discarded-values",
+    "light-fp/no-throw",
+    "light-fp/no-throw",
+    "light-fp/readonly-data",
+    "light-fp/readonly-data",
+    "light-fp/readonly-data",
+    "light-fp/readonly-data",
+  ],
+  "domain/persistence.good.ts": [],
+  "domain/shared/primitives.ts": [],
+  "domain/validation_pipeline.bad.ts": [
+    "light-fp/no-ambient-effects",
+    "light-fp/no-ambient-effects",
+    "light-fp/no-ambient-effects",
+    "light-fp/no-discarded-values",
+    "light-fp/no-discarded-values",
+    "light-fp/no-throw",
+    "light-fp/no-unsafe-cast",
+    "light-fp/prefer-type-for-data",
+    "light-fp/readonly-data",
+    "light-fp/readonly-data",
+    "light-fp/readonly-data",
+    "light-fp/readonly-data",
+    "light-fp/readonly-data",
+  ],
+  "domain/validation_pipeline.good.ts": [],
+};
+
+Deno.test("examples: every file has its exact documented diagnostics", () => {
+  assertEquals(
+    [...corpus.keys()].toSorted(),
+    Object.keys(expectedDiagnostics).toSorted(),
+    "the example corpus changed without updating its diagnostic record",
+  );
+
+  for (const [name, expected] of Object.entries(expectedDiagnostics)) {
+    const actual = corpus.get(name);
+    if (!actual) throw new Error(`${name} is missing from the example corpus`);
     assertEquals(
-      diagnostics.map((d) => `${d.id} ${d.message}`),
-      [],
-      `${name} is presented as correct but the gate rejects it`,
-    );
-  }
-});
-
-Deno.test("examples: adapters and the prelude are clean", () => {
-  for (const [name, diagnostics] of corpus) {
-    if (!name.startsWith("adapters/") && !name.endsWith("primitives.ts")) {
-      continue;
-    }
-    assertEquals(
-      diagnostics.map((d) => `${d.id} ${d.message}`),
-      [],
-      `${name} should pass at its own layer`,
-    );
-  }
-});
-
-Deno.test("examples: every .bad.ts file is rejected", () => {
-  for (const [name, diagnostics] of corpus) {
-    if (!name.endsWith(".bad.ts") && name !== "domain/bad.ts") continue;
-    if (diagnostics.length > 0) continue;
-    throw new Error(
-      `${name} is presented as a violation but the gate accepts it`,
+      actual.map((diagnostic) => diagnostic.id).toSorted(),
+      expected,
+      `${name} no longer produces its documented diagnostic list`,
     );
   }
 });
@@ -72,17 +150,10 @@ Deno.test("examples: the corpus exercises every rule", () => {
   }
   // require-ignore-reason has nothing to fire on here: the corpus carries no
   // suppressions, which is itself the point.
-  const expected = [
-    "light-fp/layer-boundary",
-    "light-fp/no-ambient-effects",
-    "light-fp/no-discarded-values",
-    "light-fp/no-oo",
-    "light-fp/no-throw",
-    "light-fp/no-unsafe-cast",
-    "light-fp/prefer-type-for-data",
-    "light-fp/pure-module",
-    "light-fp/readonly-data",
-  ];
+  const expected = Object.keys(plugin.rules)
+    .filter((id) => id !== "require-ignore-reason")
+    .map((id) => `light-fp/${id}`)
+    .toSorted();
   assertEquals(
     expected.filter((id) => !fired.has(id)),
     [],
