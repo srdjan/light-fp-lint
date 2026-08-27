@@ -1,5 +1,5 @@
 {
-  "name": "@light-fp/deno-lint-plugin",
+  "name": "@srdjan/light-fp-lint",
   "version": "0.5.0",
   "exports": {
     ".": "./src/mod.ts",
