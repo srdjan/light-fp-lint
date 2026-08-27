@@ -123,7 +123,11 @@ export const toPersistenceDraft = (
   cap: ClockCapability,
   normalized: NormalizedSignup,
 ): PersistenceEffect =>
-  brandWithCapability("IO", cap, async (clockCap) => ({
-    ...normalized,
-    createdAt: clockCap.clock(),
-  }));
+  // The plan reads the clock and nothing else, so there is nothing to await.
+  // `brandWithCapability` still wants a promise, so say so directly rather than
+  // marking the function `async` and leaving a bare `async` with no `await`.
+  brandWithCapability("IO", cap, (clockCap) =>
+    Promise.resolve({
+      ...normalized,
+      createdAt: clockCap.clock(),
+    }));
