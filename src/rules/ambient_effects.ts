@@ -1,6 +1,6 @@
 // @light-fp adapter -- a lint rule adapts Deno's visitor API: it reports through a
 // void callback and is driven by mutation it does not own.
-import { isDomain } from "../layer.ts";
+import { layerOf } from "../layer.ts";
 
 /** Ambient objects the domain must never reach. */
 const AMBIENT_OBJECTS: Readonly<Record<string, string>> = {
@@ -53,17 +53,111 @@ const AMBIENT_CONSTRUCTORS: Readonly<Record<string, string>> = {
   BroadcastChannel: "a Channel capability",
 };
 
+type SyntaxNode = Deno.lint.Node | Deno.lint.TSParameterProperty;
+
+const isNode = (value: unknown): value is SyntaxNode =>
+  typeof value === "object" &&
+  value !== null &&
+  "type" in value &&
+  typeof value.type === "string";
+
+const localBindings = (ast: Deno.lint.Program): ReadonlySet<string> => {
+  const names = new Set<string>();
+  const visited = new Set<SyntaxNode>();
+
+  const addPattern = (node: SyntaxNode | null): void => {
+    if (!node) return;
+    if (node.type === "Identifier") {
+      names.add(node.name);
+      return;
+    }
+    if (node.type === "AssignmentPattern") {
+      addPattern(node.left);
+      return;
+    }
+    if (node.type === "RestElement") {
+      addPattern(node.argument);
+      return;
+    }
+    if (node.type === "ArrayPattern") {
+      for (const element of node.elements) addPattern(element);
+      return;
+    }
+    if (node.type === "ObjectPattern") {
+      for (const property of node.properties) {
+        addPattern(property.type === "Property" ? property.value : property);
+      }
+      return;
+    }
+    if (node.type === "TSParameterProperty") addPattern(node.parameter);
+  };
+
+  const visit = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item);
+      return;
+    }
+    if (!isNode(value) || visited.has(value)) return;
+    visited.add(value);
+
+    if (
+      value.type === "ImportSpecifier" ||
+      value.type === "ImportDefaultSpecifier" ||
+      value.type === "ImportNamespaceSpecifier"
+    ) {
+      names.add(value.local.name);
+    } else if (value.type === "VariableDeclarator") {
+      addPattern(value.id);
+    } else if (value.type === "FunctionDeclaration") {
+      if (value.id) names.add(value.id.name);
+      for (const parameter of value.params) addPattern(parameter);
+    } else if (
+      value.type === "FunctionExpression" ||
+      value.type === "ArrowFunctionExpression"
+    ) {
+      for (const parameter of value.params) addPattern(parameter);
+    }
+
+    const prototype = Object.getPrototypeOf(value);
+    for (const key of Object.getOwnPropertyNames(prototype)) {
+      if (key === "constructor" || key === "parent") continue;
+      const child: unknown = Reflect.get(value, key);
+      visit(child);
+    }
+  };
+
+  visit(ast);
+  return names;
+};
+
 const nameOf = (node: Deno.lint.Node | null | undefined): string | undefined =>
   node && node.type === "Identifier" ? node.name : undefined;
 
 const propertyName = (node: Deno.lint.MemberExpression): string | undefined => {
-  if (node.computed) return undefined;
-  return node.property.type === "Identifier" ? node.property.name : undefined;
+  if (!node.computed) {
+    return node.property.type === "Identifier" ? node.property.name : undefined;
+  }
+  return node.property.type === "Literal" &&
+      typeof node.property.value === "string"
+    ? node.property.value
+    : undefined;
 };
+
+const firstCapability = (
+  capabilities: Readonly<Record<string, string>> | undefined,
+): string | undefined => capabilities && Object.values(capabilities)[0];
+
+const capabilityOf = (name: string): string | undefined =>
+  AMBIENT_OBJECTS[name] ??
+    AMBIENT_CALLS[name] ??
+    firstCapability(AMBIENT_MEMBERS[name]) ??
+    AMBIENT_CONSTRUCTORS[name];
 
 export const noAmbientEffects: Deno.lint.Rule = {
   create(context) {
-    if (!isDomain(context.filename, context.sourceCode)) return {};
+    if (layerOf(context.filename, context.sourceCode) === "adapter") return {};
+
+    const local = localBindings(context.sourceCode.ast);
 
     const report = (node: Deno.lint.Node, what: string, capability: string) => {
       context.report({
@@ -74,9 +168,35 @@ export const noAmbientEffects: Deno.lint.Rule = {
       });
     };
 
+    const unboundNameOf = (
+      node: Deno.lint.Node | null | undefined,
+    ): string | undefined => {
+      const name = nameOf(node);
+      return name && !local.has(name) ? name : undefined;
+    };
+
+    const isAliasPosition = (node: Deno.lint.Identifier): boolean => {
+      const parent = context.sourceCode.getAncestors(node).at(-1);
+      if (!parent) return false;
+      if (parent.type === "VariableDeclarator") return parent.init === node;
+      if (parent.type === "AssignmentExpression") return parent.right === node;
+      if (parent.type === "ExportDefaultDeclaration") {
+        return parent.declaration === node;
+      }
+      if (parent.type === "ExportSpecifier") {
+        const declaration = context.sourceCode.getAncestors(parent).at(-1);
+        if (
+          declaration?.type === "ExportNamedDeclaration" &&
+          declaration.source !== null
+        ) return false;
+        return parent.local === node;
+      }
+      return false;
+    };
+
     return {
       MemberExpression(node) {
-        const object = nameOf(node.object);
+        const object = unboundNameOf(node.object);
         if (!object) return;
 
         const ambient = AMBIENT_OBJECTS[object];
@@ -94,14 +214,20 @@ export const noAmbientEffects: Deno.lint.Rule = {
       },
 
       CallExpression(node) {
-        const callee = nameOf(node.callee);
+        const callee = unboundNameOf(node.callee);
         if (!callee) return;
         const capability = AMBIENT_CALLS[callee];
         if (capability) report(node, `\`${callee}()\``, capability);
       },
 
+      Identifier(node) {
+        if (local.has(node.name) || !isAliasPosition(node)) return;
+        const capability = capabilityOf(node.name);
+        if (capability) report(node, `\`${node.name}\``, capability);
+      },
+
       NewExpression(node) {
-        const callee = nameOf(node.callee);
+        const callee = unboundNameOf(node.callee);
         if (!callee) return;
 
         // `new Date(ms)` is a pure conversion. `new Date()` reads the clock.
