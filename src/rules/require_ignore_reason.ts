@@ -36,7 +36,8 @@ export const requireIgnoreReason: Deno.lint.Rule = {
 
           const fileMatch = IGNORE_FILE.exec(text);
           if (fileMatch) {
-            if (!namesLightFp(fileMatch[1])) continue;
+            const { rules } = splitReason(fileMatch[1]);
+            if (rules.length > 0 && !namesLightFp(rules)) continue;
             context.report({
               range: comment.range,
               message:

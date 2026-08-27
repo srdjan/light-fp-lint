@@ -13,7 +13,7 @@ export type Layer = "domain" | "adapter" | "prelude";
 
 export const LAYERS: readonly Layer[] = ["domain", "adapter", "prelude"];
 
-const PRAGMA = /@light-fp\s+([a-z-]+)/;
+const PRAGMA = /^\s*@light-fp\s+(\S+)/;
 
 const ADAPTER_SEGMENTS = new Set([
   "adapters",
@@ -25,13 +25,50 @@ const ADAPTER_SEGMENTS = new Set([
 
 const ADAPTER_BASENAMES = new Set(["main.ts"]);
 
-const TEST_SUFFIXES = ["_test.ts", ".test.ts", "_bench.ts", ".bench.ts"];
+const LINTABLE_EXTENSIONS = [
+  "ts",
+  "tsx",
+  "mts",
+  "cts",
+  "js",
+  "jsx",
+  "mjs",
+  "cjs",
+];
+
+const TEST_SUFFIXES = ["_test", ".test", "_bench", ".bench"].flatMap(
+  (marker) => LINTABLE_EXTENSIONS.map((extension) => `${marker}.${extension}`),
+);
 
 export const toPosix = (filename: string): string =>
   filename.replaceAll("\\", "/");
 
+const currentRoot = (): string | undefined => {
+  // deno-lint-ignore light-fp/no-throw -- Root discovery must tolerate hosts that deny cwd access.
+  try {
+    // deno-lint-ignore light-fp/no-ambient-effects -- Reading cwd once anchors absolute lint paths to the workspace.
+    return toPosix(Deno.cwd());
+  } catch {
+    return undefined;
+  }
+};
+
+const ROOT = currentRoot();
+
+export const pathWithinRoot = (
+  filename: string,
+  root: string | undefined,
+): string => {
+  const posix = toPosix(filename);
+  if (!root) return posix;
+
+  const posixRoot = toPosix(root);
+  const prefix = posixRoot.endsWith("/") ? posixRoot : `${posixRoot}/`;
+  return posix.startsWith(prefix) ? posix.slice(prefix.length) : posix;
+};
+
 const segmentsOf = (filename: string): readonly string[] =>
-  toPosix(filename).split("/").filter(Boolean);
+  pathWithinRoot(filename, ROOT).split("/").filter(Boolean);
 
 export const isTestFile = (filename: string): boolean => {
   const posix = toPosix(filename);
@@ -53,7 +90,7 @@ export type PragmaLookup =
   };
 
 const isLayer = (token: string): token is Layer =>
-  (LAYERS as readonly string[]).includes(token);
+  LAYERS.some((layer) => layer === token);
 
 export const readPragma = (sourceCode: Deno.lint.SourceCode): PragmaLookup => {
   // A pragma only counts as a file header, so it has to precede any statement.
@@ -85,6 +122,7 @@ export const layerOf = (
 ): Layer => {
   const pragma = readPragma(sourceCode);
   if (pragma.kind === "valid") return pragma.layer;
+  if (pragma.kind === "invalid") return "domain";
 
   if (isTestFile(filename)) return "adapter";
 
