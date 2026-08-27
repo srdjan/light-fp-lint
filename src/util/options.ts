@@ -1,4 +1,4 @@
-import { globToRegExp } from "https://deno.land/std@0.224.0/path/glob.ts";
+import { globToRegExp } from "https://deno.land/std@0.224.0/path/glob_to_regexp.ts";
 
 export type GlobMatcher = (filename: string) => boolean;
 

@@ -1,4 +1,4 @@
-import type { TSESTree } from "npm:@typescript-eslint/types@6.22.0";
+import type { TSESTree } from "npm:@typescript-eslint/types@6.21.0";
 
 export const isIdentifier = (n: TSESTree.Node | null | undefined): n is TSESTree.Identifier =>
   !!n && n.type === "Identifier";

@@ -1,6 +1,9 @@
 {
   "name": "@light-fp/deno-lint-plugin",
   "version": "0.3.0",
+  "exports": {
+    ".": "./src/mod.ts"
+  },
   "lint": {
     "rules": {
       "include": [
@@ -16,8 +19,8 @@
   },
   "imports": {
     "@std/path": "https://deno.land/std@0.224.0/path/mod.ts",
-    "@std/glob": "https://deno.land/std@0.224.0/path/glob.ts",
-    "@types": "npm:@typescript-eslint/types@6.22.0"
+    "@std/glob": "https://deno.land/std@0.224.0/path/glob_to_regexp.ts",
+    "@types": "npm:@typescript-eslint/types@6.21.0"
   },
   "tasks": {
     "fmt": "deno fmt",

@@ -1,12 +1,12 @@
 // Effect discipline core rules (extracted and adapted)
-import type { TSESTree } from "npm:@typescript-eslint/types@6.22.0";
+import type { TSESTree } from "npm:@typescript-eslint/types@6.21.0";
 import { normalizeOptions, toPosix } from "../util/options.ts";
 import { getCalleeName, isReadonlyArrayType, typeContainsEffectBrand, unwrapExpression } from "../util/ast.ts";
 
 export const effectBrandOriginRule: Deno.lint.RuleModule = {
   meta: { docs: { description: "Ensure effect brands originate from authorized helpers.", recommended: true } },
   create(context) {
-    const [rawOptions] = context.options as [any?];
+    const rawOptions = context.options?.[0];
     const options = normalizeOptions(rawOptions);
     const filename = toPosix(context.filename ?? "");
     const brandedIdentifiers = new Set<string>();
@@ -103,7 +103,7 @@ export const effectBrandOriginRule: Deno.lint.RuleModule = {
 export const noDirectEffectAssertionRule: Deno.lint.RuleModule = {
   meta: { docs: { description: "Disallow direct type assertions that add effect brands.", recommended: true } },
   create(context) {
-    const [rawOptions] = context.options as [any?];
+    const rawOptions = context.options?.[0];
     const options = normalizeOptions(rawOptions);
     const filename = toPosix(context.filename ?? "");
 
@@ -132,7 +132,7 @@ export const noDirectEffectAssertionRule: Deno.lint.RuleModule = {
 export const resultTypeRule: Deno.lint.RuleModule = {
   meta: { docs: { description: "Enforce Result<E,A> usage for effectful errors and forbid raw throws in domain code.", recommended: true } },
   create(context) {
-    const [rawOptions] = context.options as [any?];
+    const rawOptions = context.options?.[0];
     const options = normalizeOptions(rawOptions);
     const filename = toPosix(context.filename ?? "");
     if (!options.domainMatcher(filename) || options.adapterMatcher(filename)) return {};
@@ -186,7 +186,7 @@ export const resultTypeRule: Deno.lint.RuleModule = {
 export const interfaceVsTypeRule: Deno.lint.RuleModule = {
   meta: { docs: { description: "Prefer `type` for data structures and `interface` for capabilities.", recommended: true }, fixable: "code" },
   create(context) {
-    const [rawOptions] = context.options as [any?];
+    const rawOptions = context.options?.[0];
     const options = normalizeOptions(rawOptions);
     const filename = toPosix(context.filename ?? "");
     if (options.ignoreMatcher(filename)) return {};
@@ -240,7 +240,7 @@ export const interfaceVsTypeRule: Deno.lint.RuleModule = {
 export const immutabilityRule: Deno.lint.RuleModule = {
   meta: { docs: { description: "Require readonly properties and arrays in type literals representing data.", recommended: true } },
   create(context) {
-    const [rawOptions] = context.options as [any?];
+    const rawOptions = context.options?.[0];
     const options = normalizeOptions(rawOptions);
     const filename = toPosix(context.filename ?? "");
     if (options.ignoreMatcher(filename)) return {};
@@ -273,7 +273,7 @@ export const immutabilityRule: Deno.lint.RuleModule = {
 export const noClassRule: Deno.lint.RuleModule = {
   meta: { docs: { description: "Disallow classes in domain code; prefer algebraic data types and functions.", recommended: true } },
   create(context) {
-    const [rawOptions] = context.options as [any?];
+    const rawOptions = context.options?.[0];
     const { domainMatcher, adapterMatcher, allowedThrowMatcher } = normalizeOptions(rawOptions);
     const filename = toPosix(context.filename ?? "");
     if (!domainMatcher(filename) || adapterMatcher(filename)) return {};
