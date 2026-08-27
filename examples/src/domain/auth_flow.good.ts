@@ -71,9 +71,14 @@ export type AuthPlan = WithCapability<
 
 const normalizeEmail = (email: string): string => email.trim().toLowerCase();
 
-const validateEmail = (
-  raw: Credentials,
-): Result<AuthError, Credentials & { readonly email: Email }> => {
+// Each validator is generic in its input so it adds a brand without discarding
+// the ones already there. Written against a bare `Credentials` instead, the
+// second validator in a chain would erase the first one's brand, and the two
+// would have to be applied in one fixed order forever.
+
+const validateEmail = <T extends Credentials>(
+  raw: T,
+): Result<AuthError, T & { readonly email: Email }> => {
   const normalized = normalizeEmail(raw.email);
   if (!normalized.includes("@")) {
     return err({ type: "InvalidEmail", reason: "Must contain @" });
@@ -81,9 +86,9 @@ const validateEmail = (
   return ok({ ...raw, email: normalized as Email });
 };
 
-const validatePassword = (
-  raw: Credentials,
-): Result<AuthError, Credentials & { readonly password: Password }> => {
+const validatePassword = <T extends Credentials>(
+  raw: T,
+): Result<AuthError, T & { readonly password: Password }> => {
   if (raw.password.length < 12) {
     return err({
       type: "InvalidPassword",
