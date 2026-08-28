@@ -10,6 +10,7 @@ maintains the index.
 | Plan                                   | Title                                                        | Priority | Effort | Depends on | Status |
 | -------------------------------------- | ------------------------------------------------------------ | -------- | ------ | ---------- | ------ |
 | [001](001-distribute-light-fp-gate.md) | Distribute the Light FP gate for developers and Codex agents | P1       | M      | -          | DONE   |
+| [002](002-rederive-review.md)          | Rederive review: baseline + ranked re-basing plan            | P2       | S      | -          | DONE   |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (`reason`) | REJECTED
 (`reason`)
