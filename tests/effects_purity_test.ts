@@ -244,3 +244,24 @@ for (
     );
   });
 }
+
+// The README documents binding analysis as file-wide, not lexical: a local or
+// imported binding with an ambient name makes that name local for the whole
+// file. The existing cases all declare the binding before the use; these pin
+// the two sharp edges of that approximation.
+
+Deno.test("no-ambient-effects: a binding after the use still silences it", () => {
+  assertRuleCount(
+    "light-fp/no-ambient-effects",
+    `const x = fetch("u");\nconst fetch = (u: string) => u;`,
+    0,
+  );
+});
+
+Deno.test("no-ambient-effects: a nested binding silences a top-level use", () => {
+  assertRuleCount(
+    "light-fp/no-ambient-effects",
+    `export const f = () => fetch("u");\nconst g = () => { const fetch = 1; return fetch; };`,
+    0,
+  );
+});

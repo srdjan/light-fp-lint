@@ -87,6 +87,19 @@ Deno.test("prefer-type-for-data: construct signatures describe ports", () => {
   assertEquals(diagnosticsFor("prefer-type-for-data", source).length, 0);
 });
 
+Deno.test("prefer-type-for-data: an extending interface reports without a fix", () => {
+  // `extends` has no type-alias equivalent that preserves declaration merging,
+  // so the rule must not offer a rewrite it cannot perform correctly.
+  const found = diagnosticsFor(
+    "prefer-type-for-data",
+    `interface Base { load(): Promise<string> }\ninterface User extends Base { readonly name: string }`,
+  );
+  assertEquals(found.length, 1);
+  // The API represents an absent fix as an empty edit array; the contract is
+  // that no rewrite is offered, unlike the plain-interface case.
+  assertEquals(found[0].fix, []);
+});
+
 Deno.test("no-oo: ambient classes stay silent", () => {
   assertEquals(
     diagnosticsFor("no-oo", `declare class External { value: string }`).map(

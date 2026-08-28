@@ -477,6 +477,18 @@ check("require-ignore-reason", [
     expect: fires("require-ignore-reason"),
   },
   {
+    name: "a nine-character reason still fails",
+    source:
+      `// deno-lint-ignore light-fp/no-throw -- 012345678\nexport const f = () => 1;`,
+    expect: fires("require-ignore-reason"),
+  },
+  {
+    name: "a ten-character reason passes",
+    source:
+      `// deno-lint-ignore light-fp/no-throw -- 0123456789\nexport const f = () => 1;`,
+    expect: silent,
+  },
+  {
     name: "a file-wide light-fp opt-out is refused",
     source:
       `// deno-lint-ignore-file light-fp/no-throw\nexport const f = () => 1;`,
