@@ -8,12 +8,6 @@ A Deno lint plugin for Light Functional Programming in TypeScript: module-scope
 purity checks, explicit error-as-value conventions, readonly data declarations,
 and a hexagonal boundary between domain and adapters.
 
-> **Publication status:** `@srdjan/light-fp-lint` is not yet published to JSR.
-> The JSR specifiers and hook commands below describe the interface after the
-> first publish; until then they do not resolve, and this checkout uses the
-> local plugin path instead. Delete this note in the same commit as the first
-> publish.
-
 ## Contents
 
 - [What the gate guarantees](#what-the-gate-guarantees)
@@ -58,7 +52,7 @@ allowance for smart constructors.
 
 ## Quick start
 
-After the first publish, add the registry package to `deno.json`:
+Add the published JSR package to `deno.json`:
 
 ```jsonc
 {
@@ -68,8 +62,9 @@ After the first publish, add the registry package to `deno.json`:
 }
 ```
 
-Until then, a checkout of this repository can load the implementation by its
-local path:
+### Repository development
+
+When you develop this repository, load the plugin from its local source path:
 
 ```jsonc
 {
@@ -414,8 +409,8 @@ itself, so the comparison stays pure and the effect stays at the edge.
 
 ## Local pre-commit hook
 
-After the first JSR publish, Git 2.55 or newer can install the optional named
-hook from the versioned package export:
+Git 2.55 or newer can install the optional named hook from the versioned package
+export:
 
 ```console
 $ deno run --allow-run=git jsr:@srdjan/light-fp-lint@0.6.0/hook install

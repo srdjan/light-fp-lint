@@ -108,6 +108,33 @@ Deno.test("package: README install commands name this release", async () => {
     readme.includes(`jsr:${config.name}@${config.version}/hook install`),
     true,
   );
+
+  const registryPlugin = `jsr:${config.name}@^${config.version}`;
+  const repositoryDevelopment = "### Repository development";
+  const localPlugin = '"plugins": ["./src/mod.ts"]';
+  assertEquals(
+    readme.indexOf(registryPlugin) < readme.indexOf(repositoryDevelopment),
+    true,
+  );
+  assertEquals(
+    readme.indexOf(repositoryDevelopment) < readme.indexOf(localPlugin),
+    true,
+  );
+
+  const lowerReadme = readme.toLowerCase();
+  for (
+    const staleClaim of [
+      "publication status:",
+      "not yet published",
+      "after the first publish",
+      "until then",
+      "do not resolve",
+      "delete this note",
+      "after the first jsr publish",
+    ]
+  ) {
+    assertEquals(lowerReadme.includes(staleClaim), false, staleClaim);
+  }
 });
 
 Deno.test("package: local marketplace installs this checkout", async () => {
