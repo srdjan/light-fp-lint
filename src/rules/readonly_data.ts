@@ -2,11 +2,6 @@
 // void callback and is driven by mutation it does not own.
 import { layerOf } from "../layer.ts";
 
-const DATA_DECLARATIONS = new Set([
-  "TSTypeAliasDeclaration",
-  "TSInterfaceDeclaration",
-]);
-
 const CALLABLE_TYPES = new Set([
   "FunctionDeclaration",
   "FunctionExpression",
@@ -25,10 +20,9 @@ const MUTABLE_COLLECTIONS: Readonly<Record<string, string>> = {
   Set: "ReadonlySet",
 };
 
-type TypePosition = Readonly<{
-  readonly inData: boolean;
+type Frame = Readonly<{
+  readonly inData: boolean | undefined;
   readonly inAmbient: boolean;
-  readonly parent: Deno.lint.Node | undefined;
 }>;
 
 /**
@@ -37,31 +31,26 @@ type TypePosition = Readonly<{
  * object, or inside a generic argument is the same node type at any depth. The
  * old shape missed every discriminated union member, which is the central data
  * shape of this style.
+ *
+ * A node's policy is decided by its enclosing declarations: the nearest
+ * data-or-callable declaration above it decides whether it is data, and any
+ * enclosing ambient declaration (module or `declare` interface) exempts it. The
+ * original rule re-derived that context by walking the ancestor chain for every
+ * visited node. The enter/`:exit` visitors below maintain the same context as a
+ * frame stack instead: entering a data, callable, or ambient declaration pushes
+ * a frame, leaving pops it, and the answer is the deepest open frame.
  */
 export const readonlyData: Deno.lint.Rule = {
   create(context) {
     if (layerOf(context.filename, context.sourceCode) === "adapter") return {};
 
-    const typePosition = (node: Deno.lint.Node): TypePosition => {
-      const ancestors = context.sourceCode.getAncestors(node);
-      let inData: boolean | undefined;
-      let inAmbient = false;
-      for (let index = ancestors.length - 1; index >= 0; index -= 1) {
-        const ancestor = ancestors[index];
-        if (
-          ancestor.type === "TSModuleDeclaration" ||
-          (ancestor.type === "TSInterfaceDeclaration" && ancestor.declare)
-        ) inAmbient = true;
-        if (inData !== undefined) continue;
-        if (CALLABLE_TYPES.has(ancestor.type)) inData = false;
-        if (DATA_DECLARATIONS.has(ancestor.type)) inData = true;
-      }
-      return {
-        inData: inData ?? false,
-        inAmbient,
-        parent: ancestors.at(-1),
-      };
-    };
+    const frames: Frame[] = [];
+
+    const inAmbient = (): boolean => frames.some((frame) => frame.inAmbient);
+
+    const inData = (): boolean =>
+      frames.filter((frame) => frame.inData !== undefined).at(-1)?.inData ??
+        false;
 
     const isCallableProperty = (node: Deno.lint.TSPropertySignature): boolean =>
       node.typeAnnotation?.typeAnnotation.type === "TSFunctionType";
@@ -75,13 +64,29 @@ export const readonlyData: Deno.lint.Rule = {
       return `readonly ${elementText}[]`;
     };
 
-    return {
+    const visitors: Deno.lint.LintVisitor = {
+      TSTypeAliasDeclaration() {
+        frames.push({ inData: true, inAmbient: false });
+      },
+      "TSTypeAliasDeclaration:exit"() {
+        frames.pop();
+      },
+      TSInterfaceDeclaration(node) {
+        frames.push({ inData: true, inAmbient: node.declare });
+      },
+      "TSInterfaceDeclaration:exit"() {
+        frames.pop();
+      },
+      TSModuleDeclaration() {
+        frames.push({ inData: undefined, inAmbient: true });
+      },
+      "TSModuleDeclaration:exit"() {
+        frames.pop();
+      },
+
       TSPropertySignature(node) {
-        const position = typePosition(node);
-        if (position.inAmbient) return;
-        if (isCallableProperty(node)) return;
-        if (!position.inData) return;
-        if (node.readonly) return;
+        if (inAmbient() || isCallableProperty(node)) return;
+        if (!inData() || node.readonly) return;
         context.report({
           node: node.key,
           message: "Data properties are readonly.",
@@ -91,10 +96,7 @@ export const readonlyData: Deno.lint.Rule = {
       },
 
       TSIndexSignature(node) {
-        const position = typePosition(node);
-        if (position.inAmbient) return;
-        if (!position.inData) return;
-        if (node.readonly) return;
+        if (inAmbient() || !inData() || node.readonly) return;
         context.report({
           node,
           message: "Index signatures in data types are readonly.",
@@ -104,11 +106,9 @@ export const readonlyData: Deno.lint.Rule = {
       },
 
       TSArrayType(node) {
-        const position = typePosition(node);
-        if (position.inAmbient) return;
-        if (!position.inData) return;
-        const parent = position.parent;
+        if (inAmbient() || !inData()) return;
         // `readonly T[]` parses as a readonly type operator wrapping the array.
+        const parent = context.sourceCode.getAncestors(node).at(-1);
         if (
           parent && parent.type === "TSTypeOperator" &&
           parent.operator === "readonly"
@@ -130,9 +130,7 @@ export const readonlyData: Deno.lint.Rule = {
         if (node.typeName.type !== "Identifier") return;
         const replacement = MUTABLE_COLLECTIONS[node.typeName.name];
         if (!replacement) return;
-        const position = typePosition(node);
-        if (position.inAmbient) return;
-        if (!position.inData) return;
+        if (inAmbient() || !inData()) return;
         context.report({
           node: node.typeName,
           message:
@@ -142,5 +140,18 @@ export const readonlyData: Deno.lint.Rule = {
         });
       },
     };
+
+    // A callable type position demotes its contents out of the data policy.
+    for (const type of CALLABLE_TYPES) {
+      Object.assign(visitors, {
+        [type]() {
+          frames.push({ inData: false, inAmbient: false });
+        },
+        [`${type}:exit`]() {
+          frames.pop();
+        },
+      });
+    }
+    return visitors;
   },
 };
