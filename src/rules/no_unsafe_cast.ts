@@ -8,7 +8,7 @@ const SUPPRESSIONS = /^\s*@ts-(ignore|expect-error|nocheck)\b/;
 const CAST_HINT =
   "Use `satisfies`, narrow with a type guard, or move the cast into the smart constructor beside the type it creates.";
 
-/** Type alias and interface names declared anywhere in this file. */
+/** Type alias and interface names declared at the top level of this file. */
 const localTypeNames = (ast: Deno.lint.Program): ReadonlySet<string> => {
   const names = new Set<string>();
   const visit = (node: Deno.lint.Node) => {

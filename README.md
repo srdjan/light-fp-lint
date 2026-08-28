@@ -585,6 +585,12 @@ compatibility task that drives the real CLI across every plugin rule and runs
 the hook and package E2E suites. `tests/fix_test.ts` asserts the exact text each
 fix produces and then typechecks it. `tests/examples_test.ts` pins the example
 corpus, so the documentation cannot drift away from what the rules do.
+`tests/comments_fallback_test.ts` fabricates a `SourceCode` without
+`getAllComments` so the Deno 2.2 comment-scanner fallback is judged on every
+Deno version, not only under the 2.2 matrix. `tests/readonly_rederive_test.ts`
+runs the readonly-data rule against a frozen copy of its previous implementation
+and requires identical diagnostics, so a future rewrite that changes behavior
+fails.
 
 ## Further reading
 

@@ -1,5 +1,6 @@
 // @light-fp adapter -- a lint rule adapts Deno's visitor API: it reports through a
 // void callback and is driven by mutation it does not own.
+import { childValuesOf } from "../ast.ts";
 import { layerOf } from "../layer.ts";
 
 /** Ambient objects the domain must never reach. */
@@ -118,10 +119,7 @@ const localBindings = (ast: Deno.lint.Program): ReadonlySet<string> => {
       for (const parameter of value.params) addPattern(parameter);
     }
 
-    const prototype = Object.getPrototypeOf(value);
-    for (const key of Object.getOwnPropertyNames(prototype)) {
-      if (key === "constructor" || key === "parent") continue;
-      const child: unknown = Reflect.get(value, key);
+    for (const child of childValuesOf(value)) {
       visit(child);
     }
   };

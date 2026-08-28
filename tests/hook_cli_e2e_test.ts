@@ -468,6 +468,75 @@ Deno.test("hook CLI: old Git status reports an installed hook as inactive", asyn
   });
 });
 
+Deno.test("hook CLI: config reads are order-independent", async () => {
+  // The two reads (--local and --show-scope filtered to local) enumerate the
+  // same entries; nothing guarantees git returns them in the same order twice.
+  // A reorder must not trip the consistency check.
+  const fakeGit: RunGit = (args) => {
+    if (args[0] === "rev-parse") {
+      return Promise.resolve({ code: 0, stdout: "/repo\n", stderr: "" });
+    }
+    if (args[0] === "--version") {
+      return Promise.resolve({
+        code: 0,
+        stdout: "git version 2.55.0\n",
+        stderr: "",
+      });
+    }
+    if (args[0] === "config" && args.includes("--get-regexp")) {
+      const local = [
+        "hook.light-fp.command\ndeno lint\0",
+        "hook.light-fp.event\npre-commit\0",
+      ];
+      const scoped = [
+        "local\0hook.light-fp.event\npre-commit\0",
+        "local\0hook.light-fp.command\ndeno lint\0",
+      ];
+      return Promise.resolve({
+        code: 0,
+        stdout: args.includes("--show-scope")
+          ? scoped.join("")
+          : local.join(""),
+        stderr: "",
+      });
+    }
+    return Promise.resolve({ code: 99, stdout: "", stderr: "unexpected" });
+  };
+
+  const result = await runHookCli(["status"], fakeGit);
+  assertEquals(result.exitCode, 0);
+  assertEquals(result.message, "installed");
+});
+
+Deno.test("hook CLI: genuinely disagreeing config reads fail", async () => {
+  const fakeGit: RunGit = (args) => {
+    if (args[0] === "rev-parse") {
+      return Promise.resolve({ code: 0, stdout: "/repo\n", stderr: "" });
+    }
+    if (args[0] === "--version") {
+      return Promise.resolve({
+        code: 0,
+        stdout: "git version 2.55.0\n",
+        stderr: "",
+      });
+    }
+    if (args[0] === "config" && args.includes("--get-regexp")) {
+      const local = "hook.light-fp.command\ndeno lint\0";
+      const scoped = "local\0hook.light-fp.command\nden0 task lint\0";
+      return Promise.resolve({
+        code: 0,
+        stdout: args.includes("--show-scope") ? scoped : local,
+        stderr: "",
+      });
+    }
+    return Promise.resolve({ code: 99, stdout: "", stderr: "unexpected" });
+  };
+
+  const result = await runHookCli(["status"], fakeGit);
+  assertEquals(result.exitCode, 1);
+  assertEquals(result.message, "inconsistent Git configuration response");
+});
+
 Deno.test("hook CLI: failed event write rolls back only the owned command", async () => {
   const calls: string[][] = [];
   const entries: { key: string; value: string }[] = [];

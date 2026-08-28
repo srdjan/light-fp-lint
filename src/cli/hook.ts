@@ -52,6 +52,22 @@ const namedValue = (raw: string): ConfigEntry | undefined => {
   return { key: raw.slice(0, separator), value: raw.slice(separator + 1) };
 };
 
+// Structural, order-independent equality over a config namespace. The two reads
+// (--local and --show-scope filtered to local) enumerate the same entries, but
+// nothing guarantees git returns them in the same order twice, and a serialized
+// string comparison would false-positive the consistency check on a reorder.
+const sameConfig = (
+  left: readonly ConfigEntry[],
+  right: readonly ConfigEntry[],
+): boolean => {
+  const configKey = (entry: ConfigEntry): string =>
+    `${entry.key}\u0000${entry.value}`;
+  const a = left.map(configKey).toSorted();
+  const b = right.map(configKey).toSorted();
+  return a.length === b.length &&
+    a.every((key, index) => key === b[index]);
+};
+
 const parseLocalEntries = (raw: string): ConfigEntries => {
   if (!raw.endsWith("\0")) return { _tag: "Failure" };
   const entries: ConfigEntry[] = [];
@@ -280,8 +296,8 @@ export const runHookCli = async (
 
   const localFromEffective = effective.entries.filter((entry) =>
     entry.scope === "local"
-  ).map(({ key, value }) => ({ key, value }));
-  if (JSON.stringify(localFromEffective) !== JSON.stringify(local.entries)) {
+  );
+  if (!sameConfig(localFromEffective, local.entries)) {
     return { exitCode: 1, message: "inconsistent Git configuration response" };
   }
   const state = hookState(effective.entries as readonly HookConfigEntry[]);

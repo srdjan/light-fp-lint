@@ -5,6 +5,8 @@ export type SourceComment = Readonly<{
   readonly range: Deno.lint.Range;
 }>;
 
+import { childValuesOf } from "./ast.ts";
+
 const BLOCKED_NODE_TYPES: readonly string[] = [
   "Literal",
   "TemplateLiteral",
@@ -18,12 +20,6 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const isRange = (value: unknown): value is Deno.lint.Range =>
   Array.isArray(value) && value.length === 2 &&
   value.every((offset) => Number.isInteger(offset));
-
-const childKeysOf = (value: Record<string, unknown>): readonly string[] =>
-  Object.getOwnPropertyNames(Object.getPrototypeOf(value)).filter((key) =>
-    key !== "constructor" && key !== "type" && key !== "parent" &&
-    key !== "range" && key !== "loc"
-  );
 
 const collectBlockedRanges = (
   ranges: Deno.lint.Range[],
@@ -40,10 +36,7 @@ const collectBlockedRanges = (
     ranges[ranges.length] = value.range;
     return ranges;
   }
-  return childKeysOf(value).reduce(
-    (result, key) => collectBlockedRanges(result, value[key]),
-    ranges,
-  );
+  return childValuesOf(value).reduce(collectBlockedRanges, ranges);
 };
 
 type SourceText =
