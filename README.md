@@ -1,4 +1,4 @@
-# @srdjan/light-fp-lint v0.6.0
+# @srdjan/light-fp-lint v0.6.1
 
 [![Version](https://img.shields.io/badge/version-0.6.0-blue)](deno.json)
 [![JSR](https://img.shields.io/badge/jsr-@srdjan%2Flight--fp--lint-black?logo=deno)](https://jsr.io/@srdjan/light-fp-lint)
