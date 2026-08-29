@@ -1,6 +1,6 @@
-# @srdjan/light-fp-lint v0.6.1
+# @srdjan/light-fp-lint
 
-[![Version](https://img.shields.io/badge/version-0.6.1-blue)](deno.json)
+[![Version](https://img.shields.io/badge/version-0.7.1-blue)](deno.json)
 [![JSR](https://img.shields.io/badge/jsr-@srdjan%2Flight--fp--lint-black?logo=deno)](https://jsr.io/@srdjan/light-fp-lint)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
@@ -57,7 +57,7 @@ Add the published JSR package to `deno.json`:
 ```jsonc
 {
   "lint": {
-    "plugins": ["jsr:@srdjan/light-fp-lint@^0.6.1"]
+    "plugins": ["jsr:@srdjan/light-fp-lint@^0.7.1"]
   }
 }
 ```
@@ -358,7 +358,7 @@ import plugin, {
   compare,
   explain,
   measure,
-} from "jsr:@srdjan/light-fp-lint@^0.6.1";
+} from "jsr:@srdjan/light-fp-lint@^0.7.1";
 import baseline from "./lint-baseline.json" with { type: "json" };
 
 const baseline: Baseline = {
@@ -415,15 +415,15 @@ Git 2.55 or newer can install the optional named hook from the versioned package
 export:
 
 ```console
-$ deno run --allow-run=git jsr:@srdjan/light-fp-lint@0.6.1/hook install
-$ deno run --allow-run=git jsr:@srdjan/light-fp-lint@0.6.1/hook status
+$ deno run --allow-run=git jsr:@srdjan/light-fp-lint@0.7.1/hook install
+$ deno run --allow-run=git jsr:@srdjan/light-fp-lint@0.7.1/hook status
 $ git hook list --show-scope pre-commit
 ```
 
 Remove the repository-local `hook.light-fp` namespace:
 
 ```console
-$ deno run --allow-run=git jsr:@srdjan/light-fp-lint@0.6.1/hook uninstall
+$ deno run --allow-run=git jsr:@srdjan/light-fp-lint@0.7.1/hook uninstall
 ```
 
 Install repairs the exact partial state where the command exists but the event
@@ -589,7 +589,7 @@ fails.
 
 ## Further reading
 
-- [Design rationale](q_and_a.md)
-- [Before and after examples](examples/src/)
+- [Design rationale](https://github.com/srdjan/light-fp-lint/blob/main/q_and_a.md)
+- [Before and after examples](https://github.com/srdjan/light-fp-lint/tree/main/examples/src)
 - [Rule implementations](src/rules/)
 - [Layer resolution](src/layer.ts)

@@ -17,6 +17,20 @@ type PackageConfig = Readonly<{
 const readPackage = async (): Promise<PackageConfig> =>
   JSON.parse(await Deno.readTextFile(join(root, "deno.json")));
 
+const markdownTargets = (markdown: string): readonly string[] =>
+  [...markdown.matchAll(/\]\(([^)]+)\)/g)].map((match) => match[1]);
+
+const relativeFileTargets = (markdown: string): readonly string[] =>
+  markdownTargets(markdown).filter((target) =>
+    !target.startsWith("#") && !/^[a-z][a-z0-9+.-]*:/i.test(target)
+  );
+
+const isPublishedPath = (
+  path: string,
+  included: readonly string[],
+): boolean =>
+  included.some((entry) => path === entry || path.startsWith(`${entry}/`));
+
 Deno.test("package: deno.json is the single package authority", async () => {
   const config = await readPackage();
 
@@ -136,6 +150,25 @@ Deno.test("package: README install commands name this release", async () => {
     ]
   ) {
     assertEquals(lowerReadme.includes(staleClaim), false, staleClaim);
+  }
+});
+
+Deno.test("package: relative README links resolve inside the package", async () => {
+  const config = await readPackage();
+  const readme = await Deno.readTextFile(join(root, "README.md"));
+
+  for (const target of relativeFileTargets(readme)) {
+    const path = target.split(/[?#]/, 1)[0].replace(/\/$/, "");
+    const exists = await Deno.stat(join(root, path)).then(
+      () => true,
+      () => false,
+    );
+    assertEquals(exists, true, `README target does not exist: ${target}`);
+    assertEquals(
+      isPublishedPath(path, config.publish.include),
+      true,
+      `README target is outside the published package: ${target}`,
+    );
   }
 });
 
