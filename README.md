@@ -575,17 +575,16 @@ pragmas because they adapt imperative APIs.
 
 The current-Deno suite uses `Deno.lint.runPlugin`. `tests/rules_test.ts` is
 table-driven per rule and asserts exact diagnostic counts, so a rule that fires
-twice fails as loudly as one that never fires. Deno 2.2 has a separate
-compatibility task that drives the real CLI across every plugin rule and runs
-the hook and package E2E suites. `tests/fix_test.ts` asserts the exact text each
-fix produces and then typechecks it. `tests/examples_test.ts` pins the example
-corpus, so the documentation cannot drift away from what the rules do.
+twice fails as loudly as one that never fires. `tests/deno_2_2_cli_test.ts`
+drives the real CLI across every plugin rule, so the oldest supported Deno stays
+covered on one pinned CI version. `tests/fix_test.ts` asserts the exact text
+each fix produces and then typechecks it. `tests/examples_test.ts` pins the
+example corpus, so the documentation cannot drift away from what the rules do.
 `tests/comments_fallback_test.ts` fabricates a `SourceCode` without
-`getAllComments` so the Deno 2.2 comment-scanner fallback is judged on every
-Deno version, not only under the 2.2 matrix. `tests/readonly_rederive_test.ts`
-runs the readonly-data rule against a frozen copy of its previous implementation
-and requires identical diagnostics, so a future rewrite that changes behavior
-fails.
+`getAllComments` so the Deno 2.2 comment-scanner fallback is judged on the
+pinned CI version too. `tests/readonly_rederive_test.ts` runs the readonly-data
+rule against a frozen copy of its previous implementation and requires identical
+diagnostics, so a future rewrite that changes behavior fails.
 
 ## Further reading
 

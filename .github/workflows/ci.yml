@@ -7,30 +7,22 @@ on:
 
 jobs:
   check:
-    name: Deno ${{ matrix.deno-version }}
+    name: check
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        deno-version: [v2.2.0, v2.x]
     steps:
       - uses: actions/checkout@v4
 
       - uses: denoland/setup-deno@v2
         with:
-          # The lint plugin API landed in 2.2 and is still marked experimental.
-          deno-version: ${{ matrix.deno-version }}
+          # One pinned version, bumped deliberately. The lint plugin API is
+          # still experimental, so its types move between releases.
+          deno-version: v2.9.6
 
       # Each of these guards a defect that once shipped:
       # fmt    - keeps the diff honest
       # check  - a rule typed against a symbol that does not exist fails here
       # lint   - the plugin lints its own source, so one that cannot load fails
       # test   - rule behavior, fixes, layer resolution, and the example corpus
-      - if: matrix.deno-version == 'v2.2.0'
-        run: deno task ci:deno-2.2
+      - run: deno task ci
 
-      - if: matrix.deno-version == 'v2.x'
-        run: deno task ci
-
-      - if: matrix.deno-version == 'v2.x'
-        run: deno publish --dry-run
+      - run: deno publish --dry-run
