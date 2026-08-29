@@ -8,3 +8,4 @@
 #
 set -e
 exec deno task ci
+exit 0
