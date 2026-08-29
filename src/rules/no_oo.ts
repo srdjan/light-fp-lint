@@ -12,10 +12,16 @@ export const noOo: Deno.lint.Rule = {
     const report = (node: Deno.lint.Node, message: string, hint = MODEL_HINT) =>
       context.report({ node, message, hint });
 
+    const inAmbientDeclaration = (node: Deno.lint.Node): boolean =>
+      context.sourceCode.getAncestors(node).some((ancestor) =>
+        ancestor.type === "TSModuleDeclaration" && ancestor.declare
+      );
+
     const reportClass = (node: Deno.lint.Node) => {
       if (
-        node.type === "ClassDeclaration" &&
-        /^declare\b/.test(context.sourceCode.getText(node))
+        inAmbientDeclaration(node) ||
+        (node.type === "ClassDeclaration" &&
+          /^declare\b/.test(context.sourceCode.getText(node)))
       ) return;
       report(
         node,

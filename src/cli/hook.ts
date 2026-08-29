@@ -134,11 +134,9 @@ const conflict = (
 ): CliResult => {
   const localRemoval =
     `git config remove-section --local hook.${lightFpHook.name}`;
-  const observed = `command: ${
-    decision.observedCommand === null
-      ? "missing"
-      : JSON.stringify(decision.observedCommand)
-  }; events: ${JSON.stringify(decision.observedEvents)}`;
+  const scope = decision.ownership === "Local" ? "local" : "non-local or mixed";
+  const observed =
+    `scope: ${scope}; command entries: ${decision.commandEntries}; event entries: ${decision.eventEntries}; other entries: ${decision.otherEntries}`;
   return {
     exitCode: 4,
     message: decision.ownership === "Local"

@@ -7,6 +7,7 @@
 
 import {
   brandWithCapability,
+  causeMessage,
   err,
   handleThrow,
   map,
@@ -46,6 +47,11 @@ export type HttpEffect = WithCapability<
 
 const bearer = (token: string): string => `Bearer ${token}`;
 
+const networkError = (cause: unknown): ApiError => ({
+  type: "Network",
+  message: causeMessage(cause, "Network request failed"),
+});
+
 const buildProfileRequest = (token: string): Result<ApiError, HttpRequest> =>
   token.trim().length === 0
     ? err({ type: "Unauthorized", message: "Missing token" })
@@ -80,7 +86,12 @@ export const planProfileFetch = (
     buildProfileRequest(token),
     (request) =>
       brandWithCapability("Http", cap, async (http) => {
-        const response = await http.request(request);
+        const received = await handleThrow(
+          () => http.request(request),
+          networkError,
+        );
+        if (received._tag === "Err") return received;
+        const response = received.value;
         if (response.status === 401) {
           return err({ type: "Unauthorized", message: "Token revoked" });
         }
@@ -102,10 +113,7 @@ export const planAuditPost = (
         // Result comes out, and this domain module does not catch the exception.
         const sent = await handleThrow(
           () => http.request(request),
-          (cause): ApiError => ({
-            type: "Network",
-            message: cause instanceof Error ? cause.message : String(cause),
-          }),
+          networkError,
         );
         if (sent._tag === "Err") return sent;
         if (sent.value.status >= 400) {

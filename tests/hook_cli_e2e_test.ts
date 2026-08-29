@@ -54,6 +54,15 @@ const runGit = (cwd: string, args: readonly string[]): Promise<ProcessResult> =>
 const runCli = (cwd: string, args: readonly string[]): Promise<ProcessResult> =>
   run(Deno.execPath(), ["run", "-A", cli, ...args], cwd);
 
+const assertRedacted = (
+  output: string,
+  secrets: readonly string[],
+): void => {
+  for (const secret of secrets) {
+    assertEquals(output.includes(secret), false, secret);
+  }
+};
+
 const gitProbe = await run(git, ["--version"], root).catch(
   (): ProcessResult => ({
     code: 1,
@@ -222,11 +231,16 @@ namedHookTest(
   "hook CLI: conflicting local ownership is diagnosed and can be uninstalled",
   async () => {
     await withRepository(async (directory) => {
+      const commandSecret = "LIGHT_FP_SYNTHETIC_COMMAND_SECRET_29AUG";
+      const eventSecret = "LIGHT_FP_SYNTHETIC_EVENT_SECRET_29AUG";
+      const duplicateEventSecret =
+        "LIGHT_FP_SYNTHETIC_DUPLICATE_EVENT_SECRET_29AUG";
+      const otherSecret = "LIGHT_FP_SYNTHETIC_OTHER_SECRET_29AUG";
       for (
         const [key, value] of [
-          ["hook.light-fp.command", "deno lint"],
-          ["hook.light-fp.event", "pre-commit"],
-          ["hook.light-fp.enabled", "false"],
+          ["hook.light-fp.command", `deno lint --token=${commandSecret}`],
+          ["hook.light-fp.event", eventSecret],
+          ["hook.light-fp.enabled", `false\n${otherSecret}`],
         ]
       ) {
         assertEquals(
@@ -235,11 +249,29 @@ namedHookTest(
           0,
         );
       }
+      assertEquals(
+        (await runGit(directory, [
+          "config",
+          "--add",
+          "--local",
+          "hook.light-fp.event",
+          `duplicate\n${duplicateEventSecret}`,
+        ])).code,
+        0,
+      );
       const refused = await runCli(directory, ["install"]);
       assertEquals(refused.code, 4);
       assertStringIncludes(refused.stderr, "conflict");
-      assertStringIncludes(refused.stderr, 'command: "deno lint"');
-      assertStringIncludes(refused.stderr, 'events: ["pre-commit"]');
+      assertRedacted(refused.stderr, [
+        commandSecret,
+        eventSecret,
+        duplicateEventSecret,
+        otherSecret,
+      ]);
+      assertStringIncludes(refused.stderr, "scope: local");
+      assertStringIncludes(refused.stderr, "command entries: 1");
+      assertStringIncludes(refused.stderr, "event entries: 2");
+      assertStringIncludes(refused.stderr, "other entries: 1");
       assertStringIncludes(
         refused.stderr,
         "git config remove-section --local hook.light-fp",
@@ -329,6 +361,8 @@ namedHookTest(
 namedHookTest("hook CLI: non-local ownership is never adopted", async () => {
   await withRepository(async (directory) => {
     const globalConfig = join(directory, "global.gitconfig");
+    const commandSecret = "LIGHT_FP_NON_LOCAL_COMMAND_SECRET_29AUG";
+    const eventSecret = "LIGHT_FP_NON_LOCAL_EVENT_SECRET_29AUG";
     assertEquals(
       (await runGit(directory, [
         "config",
@@ -336,7 +370,7 @@ namedHookTest("hook CLI: non-local ownership is never adopted", async () => {
         "--file",
         globalConfig,
         "hook.light-fp.command",
-        "deno lint",
+        `deno lint --token=${commandSecret}`,
       ])).code,
       0,
     );
@@ -347,7 +381,7 @@ namedHookTest("hook CLI: non-local ownership is never adopted", async () => {
         "--file",
         globalConfig,
         "hook.light-fp.event",
-        "pre-commit",
+        eventSecret,
       ])).code,
       0,
     );
@@ -356,6 +390,11 @@ namedHookTest("hook CLI: non-local ownership is never adopted", async () => {
       const refused = await runCli(directory, [action]);
       assertEquals(refused.code, 4);
       assertStringIncludes(refused.stderr, "conflict");
+      assertRedacted(refused.stderr, [commandSecret, eventSecret]);
+      assertStringIncludes(refused.stderr, "scope: non-local or mixed");
+      assertStringIncludes(refused.stderr, "command entries: 1");
+      assertStringIncludes(refused.stderr, "event entries: 1");
+      assertStringIncludes(refused.stderr, "other entries: 0");
       assertStringIncludes(refused.stderr, "does not remove non-local entries");
     }
     const local = await runGit(directory, [
@@ -373,6 +412,8 @@ namedHookTest("hook CLI: non-local ownership is never adopted", async () => {
 namedHookTest("hook CLI: mixed-scope ownership is never changed", async () => {
   await withRepository(async (directory) => {
     const globalConfig = join(directory, "global.gitconfig");
+    const commandSecret = "LIGHT_FP_MIXED_COMMAND_SECRET_29AUG";
+    const otherSecret = "LIGHT_FP_MIXED_OTHER_SECRET_29AUG";
     assertEquals(
       (await runGit(directory, [
         "config",
@@ -380,7 +421,7 @@ namedHookTest("hook CLI: mixed-scope ownership is never changed", async () => {
         "--file",
         globalConfig,
         "hook.light-fp.command",
-        "deno lint",
+        `deno lint --token=${commandSecret}`,
       ])).code,
       0,
     );
@@ -390,13 +431,18 @@ namedHookTest("hook CLI: mixed-scope ownership is never changed", async () => {
         "set",
         "--local",
         "hook.light-fp.enabled",
-        "false",
+        `false\n${otherSecret}`,
       ])).code,
       0,
     );
 
     const refused = await runCli(directory, ["uninstall"]);
     assertEquals(refused.code, 4);
+    assertRedacted(refused.stderr, [commandSecret, otherSecret]);
+    assertStringIncludes(refused.stderr, "scope: non-local or mixed");
+    assertStringIncludes(refused.stderr, "command entries: 1");
+    assertStringIncludes(refused.stderr, "event entries: 0");
+    assertStringIncludes(refused.stderr, "other entries: 1");
     assertStringIncludes(refused.stderr, "does not remove non-local entries");
     assertEquals(
       (await runGit(directory, [
@@ -405,7 +451,7 @@ namedHookTest("hook CLI: mixed-scope ownership is never changed", async () => {
         "--local",
         "hook.light-fp.enabled",
       ])).stdout,
-      "false\n",
+      `false\n${otherSecret}\n`,
     );
   });
 });

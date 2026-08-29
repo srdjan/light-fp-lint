@@ -101,11 +101,19 @@ Deno.test("prefer-type-for-data: an extending interface reports without a fix", 
 });
 
 Deno.test("no-oo: ambient classes stay silent", () => {
+  const declarations = [
+    `declare class External { value: string }`,
+    `declare module "pkg" { class External { value: string } }`,
+    `export {}; declare global { class External { value: string } }`,
+  ];
+
+  for (const source of declarations) {
+    assertEquals(diagnosticsFor("no-oo", source), [], source);
+  }
+
   assertEquals(
-    diagnosticsFor("no-oo", `declare class External { value: string }`).map(
-      (diagnostic) => diagnostic.message,
-    ),
-    [],
+    diagnosticsFor("no-oo", `namespace Internal { class Service {} }`).length,
+    2,
   );
 });
 

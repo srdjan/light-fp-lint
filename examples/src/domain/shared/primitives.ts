@@ -53,6 +53,14 @@ export const withCapability = <C, A>(
 
 export const raise = <E, A>(error: E): Result<E, A> => err(error);
 
+export const causeMessage = (cause: unknown, fallback: string): string => {
+  try {
+    return cause instanceof Error ? cause.message : String(cause);
+  } catch {
+    return fallback;
+  }
+};
+
 export const handleThrow = async <E, A>(
   run: () => Promise<A>,
   onError: (cause: unknown) => E,

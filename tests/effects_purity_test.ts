@@ -55,6 +55,11 @@ for (
       name: "a sourceless export of a local fetch binding is not ambient",
       source: `const fetch = (u: string) => u; export { fetch };`,
     },
+    {
+      name: "a named function expression binds its name inside its body",
+      source:
+        `export const wrap = function fetch(value: string) { return fetch(value); };`,
+    },
   ] as const
 ) {
   Deno.test(`no-ambient-effects: ${testCase.name}`, () => {

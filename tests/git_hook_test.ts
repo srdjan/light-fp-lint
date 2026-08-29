@@ -129,8 +129,9 @@ Deno.test("git hook: install decisions are versioned, idempotent, and safe", () 
     decideHookAction(command("Install"), version(55), {
       _tag: "Conflict",
       ownership: "Local",
-      observedCommand: "other",
-      observedEvents: ["pre-commit"],
+      commandEntries: 1,
+      eventEntries: 1,
+      otherEntries: 0,
     })._tag,
     "RefuseConflict",
   );

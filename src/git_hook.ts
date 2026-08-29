@@ -27,8 +27,9 @@ export type HookState =
   | {
     readonly _tag: "Conflict";
     readonly ownership: "Local" | "NonLocal";
-    readonly observedCommand: string | null;
-    readonly observedEvents: readonly string[];
+    readonly commandEntries: number;
+    readonly eventEntries: number;
+    readonly otherEntries: number;
   };
 
 export type HookConfigEntry = {
@@ -55,8 +56,9 @@ export type HookDecision =
   | {
     readonly _tag: "RefuseConflict";
     readonly ownership: "Local" | "NonLocal";
-    readonly observedCommand: string | null;
-    readonly observedEvents: readonly string[];
+    readonly commandEntries: number;
+    readonly eventEntries: number;
+    readonly otherEntries: number;
   };
 
 export const parseHookCommand = (
@@ -101,9 +103,7 @@ export const hookState = (entries: readonly HookConfigEntry[]): HookState => {
   const eventKey = `hook.${lightFpHook.name}.event`;
   const commands = entries.filter((entry) => entry.key === commandKey);
   const events = entries.filter((entry) => entry.key === eventKey);
-  const observedCommand = commands.length === 0
-    ? undefined
-    : commands.map((entry) => entry.value).join("\n");
+  const observedCommand = commands[0]?.value;
   const observedEvents = events.map((entry) => entry.value);
   const localOnly = entries.every((entry) => entry.scope === "local");
   if (
@@ -125,8 +125,9 @@ export const hookState = (entries: readonly HookConfigEntry[]): HookState => {
   return {
     _tag: "Conflict",
     ownership: localOnly ? "Local" : "NonLocal",
-    observedCommand: observedCommand ?? null,
-    observedEvents: [...observedEvents],
+    commandEntries: commands.length,
+    eventEntries: events.length,
+    otherEntries: entries.length - commands.length - events.length,
   };
 };
 
@@ -151,8 +152,9 @@ const conflictDecision = (
 ): HookDecision => ({
   _tag: "RefuseConflict",
   ownership: state.ownership,
-  observedCommand: state.observedCommand,
-  observedEvents: state.observedEvents,
+  commandEntries: state.commandEntries,
+  eventEntries: state.eventEntries,
+  otherEntries: state.otherEntries,
 });
 
 const installDecision = (state: HookState): HookDecision => {

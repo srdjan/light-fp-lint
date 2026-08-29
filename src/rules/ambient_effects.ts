@@ -116,6 +116,9 @@ const localBindings = (ast: Deno.lint.Program): ReadonlySet<string> => {
       value.type === "FunctionExpression" ||
       value.type === "ArrowFunctionExpression"
     ) {
+      if (value.type === "FunctionExpression" && value.id) {
+        names.add(value.id.name);
+      }
       for (const parameter of value.params) addPattern(parameter);
     }
 
