@@ -95,9 +95,12 @@ Deno.test("prefer-type-for-data: an extending interface reports without a fix", 
     `interface Base { load(): Promise<string> }\ninterface User extends Base { readonly name: string }`,
   );
   assertEquals(found.length, 1);
-  // The API represents an absent fix as an empty edit array; the contract is
-  // that no rewrite is offered, unlike the plain-interface case.
-  assertEquals(found[0].fix, []);
+  // Deno 2.2 types `fix` as a single edit and later versions as an edit array,
+  // so the assertion reads "no rewrite offered" without depending on either
+  // shape. That is the contract, unlike the plain-interface case.
+  const { fix } = found[0];
+  const offersFix = Array.isArray(fix) ? fix.length > 0 : fix !== undefined;
+  assertEquals(offersFix, false);
 });
 
 Deno.test("no-oo: ambient classes stay silent", () => {
