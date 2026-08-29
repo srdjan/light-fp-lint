@@ -11,6 +11,7 @@ maintains the index.
 | -------------------------------------- | ------------------------------------------------------------ | -------- | ------ | ---------- | ------ |
 | [001](001-distribute-light-fp-gate.md) | Distribute the Light FP gate for developers and Codex agents | P1       | M      | -          | DONE   |
 | [002](002-rederive-review.md)          | Rederive review: baseline + ranked re-basing plan            | P2       | S      | -          | DONE   |
+| [003](003-five-pass-quality-rebase.md) | Five-pass quality rebase                                     | P1       | M      | -          | DONE   |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (`reason`) | REJECTED
 (`reason`)

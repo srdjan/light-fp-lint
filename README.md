@@ -1,6 +1,6 @@
 # @srdjan/light-fp-lint v0.6.1
 
-[![Version](https://img.shields.io/badge/version-0.6.0-blue)](deno.json)
+[![Version](https://img.shields.io/badge/version-0.6.1-blue)](deno.json)
 [![JSR](https://img.shields.io/badge/jsr-@srdjan%2Flight--fp--lint-black?logo=deno)](https://jsr.io/@srdjan/light-fp-lint)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
@@ -31,7 +31,7 @@ the rules enforce this syntactic contract:
   bare expression statement, call, or tagged template;
 - imports do not name a recognised adapter segment, and direct uses of the
   plugin's ambient-effect vocabulary are reported;
-- explicit `throw`, `try`, and discarded call-like values are reported;
+- explicit `throw`, `try`, and discarded values are reported;
 - data declarations use readonly syntax; and
 - `as` expressions are limited to `as const` and top-level types declared in the
   same file; angle-bracket casts, non-null assertions, and `any` report.
@@ -57,7 +57,7 @@ Add the published JSR package to `deno.json`:
 ```jsonc
 {
   "lint": {
-    "plugins": ["jsr:@srdjan/light-fp-lint@^0.6.0"]
+    "plugins": ["jsr:@srdjan/light-fp-lint@^0.6.1"]
   }
 }
 ```
@@ -240,9 +240,11 @@ void save(x); // reported: an explicit discard is still a discard
 const checked = validateUser(input); // fine
 ```
 
-Assignments, `++`, literals, and bare binary expressions are not reported. A
-local accumulator inside a pure function is allowed, and readonly annotations at
-data boundaries are `readonly-data`'s job.
+Assignments, updates, generator `yield`, directive prologues, and a required
+`super()` call are transitions and are not reported. Other expression
+statements, including literals and binary expressions, produce a value and then
+discard it. A local accumulator inside a pure function is allowed, and readonly
+annotations at data boundaries are `readonly-data`'s job.
 
 ### `light-fp/readonly-data`
 
@@ -356,7 +358,7 @@ import plugin, {
   compare,
   explain,
   measure,
-} from "jsr:@srdjan/light-fp-lint@^0.6.0";
+} from "jsr:@srdjan/light-fp-lint@^0.6.1";
 import baseline from "./lint-baseline.json" with { type: "json" };
 
 const baseline: Baseline = {
@@ -413,15 +415,15 @@ Git 2.55 or newer can install the optional named hook from the versioned package
 export:
 
 ```console
-$ deno run --allow-run=git jsr:@srdjan/light-fp-lint@0.6.0/hook install
-$ deno run --allow-run=git jsr:@srdjan/light-fp-lint@0.6.0/hook status
+$ deno run --allow-run=git jsr:@srdjan/light-fp-lint@0.6.1/hook install
+$ deno run --allow-run=git jsr:@srdjan/light-fp-lint@0.6.1/hook status
 $ git hook list --show-scope pre-commit
 ```
 
 Remove the repository-local `hook.light-fp` namespace:
 
 ```console
-$ deno run --allow-run=git jsr:@srdjan/light-fp-lint@0.6.0/hook uninstall
+$ deno run --allow-run=git jsr:@srdjan/light-fp-lint@0.6.1/hook uninstall
 ```
 
 Install repairs the exact partial state where the command exists but the event
@@ -495,25 +497,25 @@ These limits are measured against the current implementation:
 
 - **The linter has no type information.** Every rule decides from one file's AST
   plus its filename. There is no cross-file resolution.
-- **Imported effects are invisible unless the specifier names an adapter
-  segment.** Wrapping `fetch` in `../ports/http.ts` and importing that helper is
-  silent. `layer-boundary` reports only exact `adapters`, `adapter`, `infra`,
-  `scripts`, or `bin` segments. It does not report `../main.ts`, even though
-  layer resolution classifies a file named `main.ts` as an adapter.
+- **Imported effects are invisible unless the local specifier names an adapter
+  boundary.** Wrapping `fetch` in `../ports/http.ts` and importing that helper
+  is silent. `layer-boundary` reports exact `adapters`, `adapter`, `infra`,
+  `scripts`, or `bin` segments and a `main` basename with any lintable
+  TypeScript or JavaScript extension.
 - **Ambient-name binding analysis is file-wide, not lexical.** A parameter or
   local declaration with a name such as `fetch` makes that name local for the
   whole file. That can silence a real global use in another scope or before the
   declaration. Passing a bare ambient object as an argument, such as
   `use(Deno)`, is also silent; member access and the explicit capture positions
   documented above are what report.
-- **Module-level construction is allowed.** `pure-module` reports calls and
-  tagged templates in initializers, but not `new LocalService()` or `new Map()`.
-  `no-ambient-effects` still reports the named effectful constructors in its
-  closed list.
-- **`no-discarded-values` covers call-like expression statements, not every
-  expression.** An ignored call, await, tagged template, optional call,
-  qualifying sequence, or `void expr` reports. A discarded literal or binary
-  expression does not.
+- **Construction inside functions is allowed.** Construction at module scope
+  runs during import, so `pure-module` reports `new LocalService()` and
+  `new Map()` there. `no-ambient-effects` separately reports its closed list of
+  named effectful constructors wherever domain code uses them.
+- **`no-discarded-values` reports every non-transition expression statement in a
+  function.** Assignments, updates, generator `yield`, directive prologues, and
+  a required `super()` call are allowed. Calls, awaits, construction, literals,
+  binary expressions, sequences, and `void expr` are reported.
 - **Readonly coverage is declaration-scoped.** Parameter and return annotations
   outside a type alias or interface are silent. The mutable collection list is
   `Array`, `Map`, and `Set`; it does not include every mutable library type.
@@ -534,12 +536,10 @@ These limits are measured against the current implementation:
   `deno lint` command supports every rule on Deno 2.2. Under exactly Deno 2.2,
   `Deno.lint.runPlugin` cannot observe layer pragmas or suppression comments;
   use the CLI for those checks or a newer Deno for programmatic comment rules.
-- **npm and node specifiers are not restricted.** A pure schema library in the
-  domain is legitimate, and banning it would only breed suppressions.
-- **There is no general npm or node allowlist.** `npm:zod` and `node:fs` are not
-  reported. A package specifier containing an exact adapter segment, such as
-  `npm:pkg/adapters/x`, is reported by the same segment matcher as a relative
-  import.
+- **External protocol specifiers are not adapter paths.** `npm:`, `node:`,
+  `jsr:`, HTTP, and data specifiers are exempt even when their package path
+  contains an adapter-named segment. A pure external library in the domain is
+  legitimate; `layer-boundary` governs local relative and absolute paths.
 
 ## Development
 

@@ -1,6 +1,7 @@
 import { assertEquals } from "@std/assert";
 import { fromFileUrl, join } from "@std/path";
 import plugin from "../src/mod.ts";
+import { expectedExampleDiagnostics } from "./example_expectations.ts";
 import { diagnose } from "./harness.ts";
 
 const root = fromFileUrl(new URL("../examples/src", import.meta.url));
@@ -28,112 +29,14 @@ const collect = async (): Promise<
 
 const corpus = await collect();
 
-// Exact per-file diagnostic multisets prevent examples from silently losing
-// documented violations.
-
-const expectedDiagnostics: Readonly<Record<string, readonly string[]>> = {
-  "adapters/auth.ts": [],
-  "adapters/http.ts": [],
-  "adapters/persistence.ts": [],
-  "adapters/side.ts": [],
-  "domain/api_orchestration.bad.ts": [
-    "light-fp/no-ambient-effects",
-    "light-fp/no-ambient-effects",
-    "light-fp/no-ambient-effects",
-    "light-fp/no-ambient-effects",
-    "light-fp/no-discarded-values",
-    "light-fp/no-discarded-values",
-    "light-fp/no-throw",
-    "light-fp/no-throw",
-  ],
-  "domain/api_orchestration.good.ts": [],
-  "domain/auth_flow.bad.ts": [
-    "light-fp/layer-boundary",
-    "light-fp/no-ambient-effects",
-    "light-fp/no-ambient-effects",
-    "light-fp/no-ambient-effects",
-    "light-fp/no-ambient-effects",
-    "light-fp/no-ambient-effects",
-    "light-fp/no-ambient-effects",
-    "light-fp/no-discarded-values",
-    "light-fp/no-discarded-values",
-    "light-fp/no-oo",
-    "light-fp/no-oo",
-    "light-fp/no-oo",
-    "light-fp/no-oo",
-    "light-fp/no-oo",
-    "light-fp/no-oo",
-    "light-fp/no-throw",
-    "light-fp/no-throw",
-    "light-fp/prefer-type-for-data",
-    "light-fp/pure-module",
-    "light-fp/pure-module",
-    "light-fp/pure-module",
-    "light-fp/pure-module",
-    "light-fp/readonly-data",
-    "light-fp/readonly-data",
-  ],
-  "domain/auth_flow.good.ts": [],
-  "domain/bad.ts": [
-    "light-fp/layer-boundary",
-    "light-fp/no-ambient-effects",
-    "light-fp/no-discarded-values",
-    "light-fp/no-oo",
-    "light-fp/no-throw",
-    "light-fp/no-unsafe-cast",
-    "light-fp/prefer-type-for-data",
-    "light-fp/pure-module",
-    "light-fp/pure-module",
-    "light-fp/readonly-data",
-    "light-fp/readonly-data",
-    "light-fp/readonly-data",
-  ],
-  "domain/effect_composition.bad.ts": [
-    "light-fp/no-ambient-effects",
-    "light-fp/no-discarded-values",
-    "light-fp/no-discarded-values",
-    "light-fp/pure-module",
-  ],
-  "domain/effect_composition.good.ts": [],
-  "domain/persistence.bad.ts": [
-    "light-fp/layer-boundary",
-    "light-fp/no-ambient-effects",
-    "light-fp/no-discarded-values",
-    "light-fp/no-throw",
-    "light-fp/no-throw",
-    "light-fp/readonly-data",
-    "light-fp/readonly-data",
-    "light-fp/readonly-data",
-    "light-fp/readonly-data",
-  ],
-  "domain/persistence.good.ts": [],
-  "domain/shared/primitives.ts": [],
-  "domain/validation_pipeline.bad.ts": [
-    "light-fp/no-ambient-effects",
-    "light-fp/no-ambient-effects",
-    "light-fp/no-ambient-effects",
-    "light-fp/no-discarded-values",
-    "light-fp/no-discarded-values",
-    "light-fp/no-throw",
-    "light-fp/no-unsafe-cast",
-    "light-fp/prefer-type-for-data",
-    "light-fp/readonly-data",
-    "light-fp/readonly-data",
-    "light-fp/readonly-data",
-    "light-fp/readonly-data",
-    "light-fp/readonly-data",
-  ],
-  "domain/validation_pipeline.good.ts": [],
-};
-
 Deno.test("examples: every file has its exact documented diagnostics", () => {
   assertEquals(
     [...corpus.keys()].toSorted(),
-    Object.keys(expectedDiagnostics).toSorted(),
+    Object.keys(expectedExampleDiagnostics).toSorted(),
     "the example corpus changed without updating its diagnostic record",
   );
 
-  for (const [name, expected] of Object.entries(expectedDiagnostics)) {
+  for (const [name, expected] of Object.entries(expectedExampleDiagnostics)) {
     const actual = corpus.get(name);
     if (!actual) throw new Error(`${name} is missing from the example corpus`);
     assertEquals(

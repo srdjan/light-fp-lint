@@ -2,59 +2,12 @@
 // Identifies the highest-complexity function per file. Run:
 // deno test -A plans/hotspots.ts -- --out plans/hotspots.tsv
 import { join } from "@std/path";
-
-const BRANCH_TYPES = new Set([
-  "IfStatement",
-  "ConditionalExpression",
-  "SwitchCase",
-  "LogicalExpression",
-  "ForStatement",
-  "ForInStatement",
-  "ForOfStatement",
-  "WhileStatement",
-  "DoWhileStatement",
-  "CatchClause",
-]);
-
-const FUNCTION_TYPES = new Set([
-  "FunctionDeclaration",
-  "FunctionExpression",
-  "ArrowFunctionExpression",
-  "MethodDefinition",
-]);
-
-const children = (node: Deno.lint.Node): readonly Deno.lint.Node[] => {
-  const out: Deno.lint.Node[] = [];
-  const prototype = Object.getPrototypeOf(node);
-  for (const key of Object.getOwnPropertyNames(prototype)) {
-    if (key === "constructor" || key === "parent") continue;
-    const child: unknown = Reflect.get(node, key);
-    if (Array.isArray(child)) {
-      for (const item of child) {
-        if (item && typeof item === "object" && "type" in item) {
-          out.push(item as Deno.lint.Node);
-        }
-      }
-    } else if (child && typeof child === "object" && "type" in child) {
-      out.push(child as Deno.lint.Node);
-    }
-  }
-  return out;
-};
-
-const countBranches = (node: Deno.lint.Node): number => {
-  let count = 0;
-  const stack: Deno.lint.Node[] = [node];
-  while (stack.length > 0) {
-    const current = stack.pop()!;
-    if (BRANCH_TYPES.has(current.type)) count += 1;
-    if (current.type === "IfStatement" && current.alternate !== null) {
-      count += 1;
-    }
-    for (const child of children(current)) stack.push(child);
-  }
-  return count;
-};
+import {
+  astChildren,
+  countBranches,
+  isFunctionNode,
+  walkTypeScriptFiles,
+} from "./ast_metrics.ts";
 
 type NamedFn = Readonly<{
   name: string;
@@ -85,18 +38,10 @@ const nameOf = (node: Deno.lint.Node): string => {
   return "(anonymous)";
 };
 
-const walk = async function* (dir: string): AsyncGenerator<string> {
-  for await (const entry of Deno.readDir(dir)) {
-    const path = join(dir, entry.name);
-    if (entry.isDirectory) yield* walk(path);
-    else if (entry.name.endsWith(".ts")) yield path;
-  }
-};
-
 Deno.test("hotspots: per-file worst functions", async () => {
   const rows: string[][] = [];
   for (const target of ["src", "hooks"]) {
-    for await (const path of walk(join(Deno.cwd(), target))) {
+    for await (const path of walkTypeScriptFiles(join(Deno.cwd(), target))) {
       if (
         path.includes("measure_branches.ts") || path.includes("hotspots.ts")
       ) {
@@ -125,7 +70,7 @@ Deno.test("hotspots: per-file worst functions", async () => {
             probe: {
               create(context) {
                 const visit = (node: Deno.lint.Node): void => {
-                  if (FUNCTION_TYPES.has(node.type)) {
+                  if (isFunctionNode(node)) {
                     const complexity = 1 + countBranches(node);
                     named.push({
                       name: nameOf(node),
@@ -134,7 +79,7 @@ Deno.test("hotspots: per-file worst functions", async () => {
                       startLine: lineOf(node.range[0]),
                     });
                   }
-                  for (const child of children(node)) visit(child);
+                  for (const child of astChildren(node)) visit(child);
                 };
                 visit(context.sourceCode.ast);
                 return {};

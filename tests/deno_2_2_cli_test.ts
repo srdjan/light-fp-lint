@@ -1,25 +1,40 @@
 // @light-fp adapter -- this compatibility test drives the real Deno CLI.
 import { assertEquals } from "@std/assert";
-import { join } from "@std/path";
+import { fromFileUrl, join, relative } from "@std/path";
 import lightFpPlugin from "../src/mod.ts";
+import { expectedExampleDiagnostics } from "./example_expectations.ts";
 
 const decoder = new TextDecoder();
 
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-const pluginCodes = (stdout: Uint8Array): readonly string[] => {
+type PluginDiagnostic =
+  & Readonly<Record<string, unknown>>
+  & Readonly<{ code: string }>;
+
+const isPluginDiagnostic = (
+  diagnostic: Readonly<Record<string, unknown>>,
+): diagnostic is PluginDiagnostic =>
+  typeof diagnostic.code === "string" &&
+  diagnostic.code.startsWith("light-fp/");
+
+const pluginDiagnostics = (stdout: Uint8Array): readonly PluginDiagnostic[] => {
   const parsed: unknown = JSON.parse(decoder.decode(stdout));
   if (!isRecord(parsed) || !Array.isArray(parsed.diagnostics)) {
     throw new Error("deno lint returned an invalid JSON envelope");
   }
-  return parsed.diagnostics.flatMap((diagnostic) =>
-    isRecord(diagnostic) && typeof diagnostic.code === "string" &&
-      diagnostic.code.startsWith("light-fp/")
-      ? [diagnostic.code]
-      : []
-  ).toSorted();
+  const diagnostics = parsed.diagnostics.map((diagnostic) => {
+    if (!isRecord(diagnostic)) {
+      throw new Error("deno lint returned an invalid diagnostic");
+    }
+    return diagnostic;
+  });
+  return diagnostics.filter(isPluginDiagnostic);
 };
+
+const pluginCodes = (stdout: Uint8Array): readonly string[] =>
+  pluginDiagnostics(stdout).map((diagnostic) => diagnostic.code).toSorted();
 
 const runLint = (directory: string, file: string) =>
   new Deno.Command(Deno.execPath(), {
@@ -29,6 +44,33 @@ const runLint = (directory: string, file: string) =>
     stdout: "piped",
     stderr: "piped",
   }).output();
+
+const exampleDiagnostics = (
+  stdout: Uint8Array,
+  sourceRoot: string,
+): Readonly<Record<string, readonly string[]>> => {
+  const found = new Map<string, string[]>(
+    Object.keys(expectedExampleDiagnostics).map((name): [string, string[]] => [
+      name,
+      [],
+    ]),
+  );
+  for (const diagnostic of pluginDiagnostics(stdout)) {
+    if (typeof diagnostic.filename !== "string") {
+      throw new Error("deno lint returned a diagnostic without a filename");
+    }
+    const path = diagnostic.filename.startsWith("file:")
+      ? fromFileUrl(diagnostic.filename)
+      : diagnostic.filename;
+    const name = relative(sourceRoot, path).replaceAll("\\", "/");
+    const codes = found.get(name);
+    if (!codes) throw new Error(`unexpected example diagnostic file: ${name}`);
+    codes.push(diagnostic.code);
+  }
+  return Object.fromEntries(
+    [...found].map(([name, codes]) => [name, codes.toSorted()]),
+  );
+};
 
 Deno.test({
   name: "Deno floor: runPlugin survives unavailable source text",
@@ -109,4 +151,15 @@ Deno.test("Deno floor: the real CLI loads every rule and honors comments", async
   } finally {
     await Deno.remove(directory, { recursive: true });
   }
+});
+
+Deno.test("Deno floor: the real CLI matches the exact example corpus", async () => {
+  const examplesRoot = fromFileUrl(new URL("../examples", import.meta.url));
+  const output = await runLint(examplesRoot, "src");
+
+  assertEquals(output.code, 1, decoder.decode(output.stderr));
+  assertEquals(
+    exampleDiagnostics(output.stdout, join(examplesRoot, "src")),
+    expectedExampleDiagnostics,
+  );
 });

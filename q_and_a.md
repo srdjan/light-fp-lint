@@ -68,19 +68,20 @@ can tolerate hosts that deny cwd access.
 
 ## Why is discarding a value an error?
 
-Because "did you handle this `Result`?" needs type information, while discarded
-call-like syntax is visible in one AST.
+Because "did you handle this `Result`?" needs type information, while a
+discarded expression is visible in one AST.
 
-The rule reports call, await, tagged-template, optional-call, and qualifying
-sequence expression statements inside functions, plus `void expr`. It does not
-report every arbitrary expression statement. An ignored call result is either
-dead code or a hidden effect, and neither requires knowing its type.
+The rule reports every expression statement inside a function unless the
+expression is an assignment, update, generator `yield`, directive prologue, or
+required `super()` call. An ignored result is either dead code or a hidden
+effect, and neither requires knowing its type.
 
 That one syntactic check covers ignored `Result` values, floating promises, and
 fire-and-forget calls.
 
-`void expr` is reported too. An explicit discard is still a discard, and letting
-`void` through would turn the rule into a formality.
+`void expr`, literals, and binary expressions are reported too. An explicit
+discard is still a discard, and letting `void` through would turn the rule into
+a formality.
 
 Logical and conditional wrappers do not change that contract. `ready && run()`,
 `ready ? accept() : reject()`, and `new Box()` each produce a value, so a bare
@@ -142,8 +143,7 @@ what keeps the rule believed.
 The constructors that are treated as effectful are named individually in
 `no-ambient-effects`: zero-argument `new Date()` reads the clock, and the five
 platform constructors in the README reach external facilities. `new Date(ms)`
-converts a number and is fine. `pure-module` also permits a constructor at
-module scope, so `export const cache = new Map()` is not reported.
+converts a number and is fine.
 
 This allowance applies inside functions. Construction at module scope is a
 different question: it runs during import, so `pure-module` reports it even when

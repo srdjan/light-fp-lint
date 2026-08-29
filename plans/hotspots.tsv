@@ -1,19 +1,22 @@
 file	function	complexity	start-line
-src/comments.ts	(anonymous arrow)	15	61
-src/comments.ts	(anonymous arrow)	6	28
-src/comments.ts	(anonymous arrow)	5	22
+src/comments.ts	(anonymous arrow)	15	54
+src/comments.ts	(anonymous arrow)	6	24
+src/comments.ts	(anonymous arrow)	3	123
 src/ratchet.ts	(anonymous arrow)	5	70
 src/ratchet.ts	(anonymous arrow)	4	56
 src/ratchet.ts	(anonymous arrow)	3	39
+src/ast.ts	(anonymous arrow)	3	23
+src/ast.ts	(anonymous arrow)	1	28
+src/ast.ts	(anonymous arrow)	1	27
 src/layer.ts	(anonymous arrow)	6	125
 src/layer.ts	(anonymous arrow)	6	85
 src/layer.ts	(anonymous arrow)	5	149
-src/git_hook.ts	(anonymous arrow)	16	95
-src/git_hook.ts	(anonymous arrow)	14	199
-src/git_hook.ts	(anonymous arrow)	9	62
-src/cli/hook.ts	(anonymous arrow)	13	240
-src/cli/hook.ts	(anonymous arrow)	13	177
-src/cli/hook.ts	(anonymous arrow)	6	81
+src/git_hook.ts	(anonymous arrow)	14	97
+src/git_hook.ts	(anonymous arrow)	14	201
+src/git_hook.ts	(anonymous arrow)	9	64
+src/cli/hook.ts	(anonymous arrow)	13	254
+src/cli/hook.ts	(anonymous arrow)	13	191
+src/cli/hook.ts	(anonymous arrow)	6	97
 src/rules/layer_boundary.ts	(anonymous)	12	18
 src/rules/layer_boundary.ts	(anonymous arrow)	5	25
 src/rules/layer_boundary.ts	(anonymous)	4	49
@@ -29,9 +32,9 @@ src/rules/pure_module.ts	(anonymous arrow)	5	46
 src/rules/prefer_type_for_data.ts	(anonymous)	8	21
 src/rules/prefer_type_for_data.ts	(anonymous)	7	25
 src/rules/prefer_type_for_data.ts	(anonymous arrow)	5	5
-src/rules/ambient_effects.ts	(anonymous arrow)	31	64
-src/rules/ambient_effects.ts	(anonymous)	25	157
-src/rules/ambient_effects.ts	(anonymous arrow)	21	95
+src/rules/ambient_effects.ts	(anonymous arrow)	31	65
+src/rules/ambient_effects.ts	(anonymous)	25	158
+src/rules/ambient_effects.ts	(anonymous arrow)	21	96
 src/rules/require_ignore_reason.ts	(anonymous)	9	33
 src/rules/require_ignore_reason.ts	(anonymous)	9	35
 src/rules/require_ignore_reason.ts	(anonymous arrow)	2	18
@@ -41,9 +44,9 @@ src/rules/readonly_data.ts	(anonymous)	5	129
 src/rules/discarded_values.ts	(anonymous arrow)	10	18
 src/rules/discarded_values.ts	(anonymous)	7	46
 src/rules/discarded_values.ts	(anonymous)	6	50
-src/rules/no_oo.ts	(anonymous)	7	9
-src/rules/no_oo.ts	(anonymous)	3	72
-src/rules/no_oo.ts	(anonymous arrow)	3	15
+src/rules/no_oo.ts	(anonymous)	9	9
+src/rules/no_oo.ts	(anonymous arrow)	4	20
+src/rules/no_oo.ts	(anonymous)	3	78
 hooks/verify.ts	(anonymous arrow)	12	109
 hooks/verify.ts	(anonymous arrow)	8	47
 hooks/verify.ts	(anonymous arrow)	6	207

@@ -2,7 +2,6 @@ import { assertEquals } from "@std/assert";
 import { fromFileUrl, join } from "@std/path";
 
 const root = fromFileUrl(new URL("..", import.meta.url));
-const releaseVersion = "0.6.0";
 
 type PackageConfig = Readonly<{
   name: string;
@@ -22,7 +21,7 @@ Deno.test("package: deno.json is the single package authority", async () => {
   const config = await readPackage();
 
   assertEquals(config.name, "@srdjan/light-fp-lint");
-  assertEquals(config.version, releaseVersion);
+  assertEquals(/^\d+\.\d+\.\d+$/.test(config.version), true);
   assertEquals(config.exports, {
     ".": "./src/mod.ts",
     "./hook": "./src/cli/hook.ts",
@@ -100,14 +99,17 @@ Deno.test("package: Codex plugin manifest references the root bundle", async () 
 Deno.test("package: README install commands name this release", async () => {
   const config = await readPackage();
   const readme = await Deno.readTextFile(join(root, "README.md"));
-  assertEquals(
-    readme.includes(`jsr:${config.name}@^${config.version}`),
-    true,
-  );
-  assertEquals(
-    readme.includes(`jsr:${config.name}@${config.version}/hook install`),
-    true,
-  );
+  for (
+    const releaseReference of [
+      `version-${config.version}-blue`,
+      `jsr:${config.name}@^${config.version}`,
+      `jsr:${config.name}@${config.version}/hook install`,
+      `jsr:${config.name}@${config.version}/hook status`,
+      `jsr:${config.name}@${config.version}/hook uninstall`,
+    ]
+  ) {
+    assertEquals(readme.includes(releaseReference), true, releaseReference);
+  }
 
   const registryPlugin = `jsr:${config.name}@^${config.version}`;
   const repositoryDevelopment = "### Repository development";
