@@ -1,8 +1,10 @@
 // @light-fp adapter -- the file system is the point of this script.
 
 // Every release names its version in four places: deno.json, the README badge,
-// the README install commands, and the Codex plugin manifest. Three releases in
-// a row bumped deno.json alone and left CI red, so the bump is a task now.
+// the README install commands, and the Codex plugin manifest. Release after
+// release bumped deno.json alone and left the rest behind, so the bump is a
+// task now. It also repairs that exact half-done state: when deno.json already
+// reads the target, the manifest still holds the version the other files use.
 
 import { dirname, fromFileUrl, join } from "@std/path";
 
@@ -26,17 +28,25 @@ if (next === undefined || !SEMVER.test(next)) {
   fail("Usage: deno task bump <version>, for example 0.7.4");
 }
 
-const configPath = join(root, "deno.json");
-const config = JSON.parse(await Deno.readTextFile(configPath));
-const current: unknown = config.version;
-if (typeof current !== "string") fail("deno.json declares no version");
-if (current === next) fail(`deno.json already reads ${next}`);
+const versionIn = async (file: string): Promise<string> => {
+  const declared: unknown =
+    JSON.parse(await Deno.readTextFile(join(root, file))).version;
+  return typeof declared === "string"
+    ? declared
+    : fail(`${file} declares no version`);
+};
+
+const declaredVersion = await versionIn("deno.json");
+const current = declaredVersion === next
+  ? await versionIn(".codex-plugin/plugin.json")
+  : declaredVersion;
+if (current === next) fail(`every file already reads ${next}`);
 
 let changed = 0;
 for (const file of FILES) {
   const path = join(root, file);
   const before = await Deno.readTextFile(path);
-  const after = before.replaceAll(current as string, next);
+  const after = before.replaceAll(current, next);
   if (after === before) {
     console.warn(`${file}: no reference to ${current}`);
     continue;

@@ -1,6 +1,6 @@
 {
   "name": "light-fp",
-  "version": "0.7.4",
+  "version": "0.7.5",
   "description": "Workflow guidance and local validation for Deno projects using the Light FP lint plugin.",
   "skills": "./skills/",
   "hooks": "./hooks/hooks.json"
