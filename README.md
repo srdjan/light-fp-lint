@@ -1,6 +1,6 @@
 # @srdjan/light-fp-lint
 
-[![Version](https://img.shields.io/badge/version-0.7.2-blue)](deno.json)
+[![Version](https://img.shields.io/badge/version-0.7.3-blue)](deno.json)
 [![JSR](https://img.shields.io/badge/jsr-@srdjan%2Flight--fp--lint-black?logo=deno)](https://jsr.io/@srdjan/light-fp-lint)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
@@ -57,7 +57,7 @@ Add the published JSR package to `deno.json`:
 ```jsonc
 {
   "lint": {
-    "plugins": ["jsr:@srdjan/light-fp-lint@^0.7.2"]
+    "plugins": ["jsr:@srdjan/light-fp-lint@^0.7.3"]
   }
 }
 ```
@@ -358,7 +358,7 @@ import plugin, {
   compare,
   explain,
   measure,
-} from "jsr:@srdjan/light-fp-lint@^0.7.2";
+} from "jsr:@srdjan/light-fp-lint@^0.7.3";
 import baseline from "./lint-baseline.json" with { type: "json" };
 
 const baseline: Baseline = {
@@ -415,15 +415,15 @@ Git 2.55 or newer can install the optional named hook from the versioned package
 export:
 
 ```console
-$ deno run --allow-run=git jsr:@srdjan/light-fp-lint@0.7.2/hook install
-$ deno run --allow-run=git jsr:@srdjan/light-fp-lint@0.7.2/hook status
+$ deno run --allow-run=git jsr:@srdjan/light-fp-lint@0.7.3/hook install
+$ deno run --allow-run=git jsr:@srdjan/light-fp-lint@0.7.3/hook status
 $ git hook list --show-scope pre-commit
 ```
 
 Remove the repository-local `hook.light-fp` namespace:
 
 ```console
-$ deno run --allow-run=git jsr:@srdjan/light-fp-lint@0.7.2/hook uninstall
+$ deno run --allow-run=git jsr:@srdjan/light-fp-lint@0.7.3/hook uninstall
 ```
 
 Install repairs the exact partial state where the command exists but the event
@@ -559,12 +559,13 @@ For local iteration, `deno task test` remains portable. It may skip only the Git
 
 Individually:
 
-| Task                      | Purpose                           |
-| ------------------------- | --------------------------------- |
-| `deno task fmt`           | format                            |
-| `deno task lint`          | lint the plugin with itself       |
-| `deno task test`          | the full test suite               |
-| `deno task examples:lint` | diagnostics on the example corpus |
+| Task                       | Purpose                           |
+| -------------------------- | --------------------------------- |
+| `deno task fmt`            | format                            |
+| `deno task lint`           | lint the plugin with itself       |
+| `deno task test`           | the full test suite               |
+| `deno task examples:lint`  | diagnostics on the example corpus |
+| `deno task bump <version>` | rewrite every version reference   |
 
 The plugin lints its own source. `src/layer.ts` resolves as domain code. The
 real CLI reports it clean because two signed line suppressions cover its one

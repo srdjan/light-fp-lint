@@ -35,11 +35,12 @@
     "@std/path": "jsr:@std/path@^1.0.0"
   },
   "tasks": {
+    "bump": "deno run --allow-read --allow-write tools/bump.ts",
     "fmt": "deno fmt",
     "lint": "deno lint",
     "test": "deno test -A",
     "examples:lint": "deno lint --config examples/deno.json examples",
-    "ci:base": "deno fmt --check && deno check src tests && deno lint",
+    "ci:base": "deno fmt --check && deno check src tests tools && deno lint",
     "ci": "deno task ci:base && LIGHT_FP_REQUIRE_NAMED_HOOKS=1 deno test -A"
   }
 }
