@@ -547,8 +547,20 @@ These limits are measured against the current implementation:
 $ deno task ci   # fmt --check, check, lint, test
 ```
 
-CI requires Git 2.55 or newer and fails if the named-hook E2E tests would skip.
-If the qualifying Git executable is not first on `PATH`, select it explicitly:
+There is no remote CI. The gate runs in a pre-commit hook instead, so enable it
+once per clone:
+
+```console
+$ git config core.hooksPath .githooks
+```
+
+`.githooks/pre-commit` runs `deno task ci` and refuses the commit if it fails.
+Nothing else checks this repository, so `--no-verify` skips the only gate there
+is.
+
+The gate requires Git 2.55 or newer and fails if the named-hook E2E tests would
+skip. If the qualifying Git executable is not first on `PATH`, select it
+explicitly:
 
 ```console
 $ LIGHT_FP_TEST_GIT=/absolute/path/to/git deno task ci
@@ -577,15 +589,16 @@ pragmas because they adapt imperative APIs.
 The current-Deno suite uses `Deno.lint.runPlugin`. `tests/rules_test.ts` is
 table-driven per rule and asserts exact diagnostic counts, so a rule that fires
 twice fails as loudly as one that never fires. `tests/deno_2_2_cli_test.ts`
-drives the real CLI across every plugin rule, so the oldest supported Deno stays
-covered on one pinned CI version. `tests/fix_test.ts` asserts the exact text
-each fix produces and then typechecks it. `tests/examples_test.ts` pins the
-example corpus, so the documentation cannot drift away from what the rules do.
+drives the real CLI across every plugin rule to keep the oldest supported Deno
+covered; it runs only where `deno --version` reports exactly 2.2.0 and reports
+as ignored everywhere else. `tests/fix_test.ts` asserts the exact text each fix
+produces and then typechecks it. `tests/examples_test.ts` pins the example
+corpus, so the documentation cannot drift away from what the rules do.
 `tests/comments_fallback_test.ts` fabricates a `SourceCode` without
-`getAllComments` so the Deno 2.2 comment-scanner fallback is judged on the
-pinned CI version too. `tests/readonly_rederive_test.ts` runs the readonly-data
-rule against a frozen copy of its previous implementation and requires identical
-diagnostics, so a future rewrite that changes behavior fails.
+`getAllComments` so the Deno 2.2 comment-scanner fallback is judged on every
+Deno version, not only on 2.2 itself. `tests/readonly_rederive_test.ts` runs the
+readonly-data rule against a frozen copy of its previous implementation and
+requires identical diagnostics, so a future rewrite that changes behavior fails.
 
 ## Further reading
 
