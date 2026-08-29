@@ -1,3 +1,33 @@
+/**
+ * A Deno lint plugin for Light Functional Programming in TypeScript.
+ *
+ * Every file resolves to one of three layers: `domain`, `adapter`, or
+ * `prelude`. Domain files carry the strict contract - no module-scope work, no
+ * ambient effects, no `throw`, no unchecked cast - and adapter files carry the
+ * effects. A file opts out with a header pragma, `// @light-fp adapter`.
+ *
+ * Register the plugin in `deno.json` and the rules run with `deno lint`:
+ *
+ * ```json
+ * {
+ *   "lint": {
+ *     "plugins": ["jsr:@srdjan/light-fp-lint"]
+ *   }
+ * }
+ * ```
+ *
+ * The default export is the plugin object itself. Each rule is also exported by
+ * name, together with layer resolution and the ratchet helpers, for tests that
+ * drive the rules directly:
+ *
+ * ```ts
+ * import plugin, { layerOf } from "@srdjan/light-fp-lint";
+ *
+ * const rules: readonly string[] = Object.keys(plugin.rules);
+ * ```
+ *
+ * @module
+ */
 // @light-fp adapter -- the plugin's composition root.
 import { layerBoundary } from "./rules/layer_boundary.ts";
 import { pureModule } from "./rules/pure_module.ts";
@@ -10,6 +40,10 @@ import { noUnsafeCast } from "./rules/no_unsafe_cast.ts";
 import { preferTypeForData } from "./rules/prefer_type_for_data.ts";
 import { requireIgnoreReason } from "./rules/require_ignore_reason.ts";
 
+/**
+ * The lint plugin, named `light-fp`. Reference it from the `lint.plugins` array
+ * of a `deno.json` file, or pass it to `Deno.lint.runPlugin` in a test.
+ */
 const plugin: Deno.lint.Plugin = {
   name: "light-fp",
   rules: {

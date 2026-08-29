@@ -1,3 +1,28 @@
+/**
+ * The `light-fp hook` command line tool: it installs, inspects, and removes the
+ * local Git pre-commit hook that runs `deno lint` before a commit lands.
+ *
+ * Run it straight from JSR:
+ *
+ * ```sh
+ * deno run -A jsr:@srdjan/light-fp-lint/hook install
+ * deno run -A jsr:@srdjan/light-fp-lint/hook status
+ * deno run -A jsr:@srdjan/light-fp-lint/hook uninstall
+ * ```
+ *
+ * The decision logic is pure and lives in `git_hook.ts`. This module is the
+ * adapter around it: Git runs behind the injected {@linkcode RunGit}
+ * capability, so the command is testable without a repository.
+ *
+ * ```ts
+ * import { runHookCli } from "@srdjan/light-fp-lint/hook";
+ *
+ * const result = await runHookCli(["status"], () =>
+ *   Promise.resolve({ code: 1, stdout: "", stderr: "" }));
+ * ```
+ *
+ * @module
+ */
 // @light-fp adapter -- Git and terminal effects stay behind injected capabilities.
 import {
   decideHookAction,
@@ -10,14 +35,25 @@ import {
   parseHookCommand,
 } from "../git_hook.ts";
 
+/** What one `git` invocation produced: its exit code and both streams. */
 export type GitResult = Readonly<{
   code: number;
   stdout: string;
   stderr: string;
 }>;
 
+/**
+ * The Git capability. It takes the argument list, without the `git` word
+ * itself, and never throws: a failure arrives as a non-zero
+ * {@linkcode GitResult.code}.
+ */
 export type RunGit = (args: readonly string[]) => Promise<GitResult>;
 
+/**
+ * What the command decided: the process exit code and the one line to print.
+ * `0` is success, `2` is a usage error, and the remaining codes report a
+ * refusal that the message explains.
+ */
 export type CliResult = Readonly<{
   exitCode: 0 | 1 | 2 | 3 | 4;
   message: string;
@@ -251,6 +287,12 @@ const applyDecision = async (
 const needsSupportedGit = (command: HookCommand): boolean =>
   command._tag === "Install" || command._tag === "Uninstall";
 
+/**
+ * Run the `hook` command. Parses `install`, `status`, `uninstall`, or `help`
+ * from `args`, reads the repository state through `runGit`, and returns the
+ * exit code and message to report. Writing to the terminal is left to the
+ * caller.
+ */
 export const runHookCli = async (
   args: readonly string[],
   runGit: RunGit,
@@ -302,6 +344,10 @@ export const runHookCli = async (
   return await applyDecision(decideHookAction(command, version, state), runGit);
 };
 
+/**
+ * The {@linkcode RunGit} capability backed by the real `git` binary. Needs
+ * `--allow-run=git`. Tests pass a stub in its place.
+ */
 export const runGitProcess: RunGit = async (args) => {
   const output = await new Deno.Command("git", {
     args: [...args],

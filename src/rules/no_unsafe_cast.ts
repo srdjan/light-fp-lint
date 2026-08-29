@@ -36,6 +36,14 @@ const targetName = (typeNode: Deno.lint.Node): string | undefined => {
 const isConstAssertion = (typeNode: Deno.lint.Node): boolean =>
   targetName(typeNode) === "const";
 
+/**
+ * `light-fp/no-unsafe-cast`: nothing overrules the type checker in a domain
+ * file. Reports `as`, angle-bracket casts, `!`, `any` in annotations, and
+ * comments that start with `@ts-ignore`, `@ts-expect-error`, or `@ts-nocheck`.
+ * Two allowances remain: `as const`, and a cast to a top-level type alias or
+ * interface declared in the same file, which is what makes smart constructors
+ * work.
+ */
 export const noUnsafeCast: Deno.lint.Rule = {
   create(context) {
     if (!isDomain(context.filename, context.sourceCode)) return {};

@@ -16,18 +16,33 @@ export type Baseline = Readonly<Record<string, number>>;
 /** Counts the diagnostics one file produces. Supplied by the caller. */
 export type CountDiagnostics = (path: string, source: string) => number;
 
+/** One file whose violation count moved between two measurements. */
 export type FileDelta = Readonly<{
   readonly file: string;
   readonly was: number;
   readonly now: number;
 }>;
 
+/**
+ * The result of comparing a measurement against a baseline. `Improved` is a
+ * failure too, because a baseline that is not tightened lets the ground that
+ * was won be lost again silently.
+ */
 export type Verdict =
   | { readonly _tag: "Unchanged" }
   | { readonly _tag: "NothingMeasured" }
   | { readonly _tag: "Regressed"; readonly files: readonly FileDelta[] }
   | { readonly _tag: "Improved"; readonly files: readonly FileDelta[] };
 
+/**
+ * Count the violations in each file and return the result as a baseline.
+ *
+ * ```ts
+ * import { measure } from "@srdjan/light-fp-lint";
+ *
+ * const baseline = measure(() => 0, [["src/cart.ts", "export const a = 1;"]]);
+ * ```
+ */
 export const measure = (
   count: CountDiagnostics,
   files: readonly (readonly [path: string, source: string])[],

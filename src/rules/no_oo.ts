@@ -5,6 +5,12 @@ import { layerOf } from "../layer.ts";
 const MODEL_HINT =
   "Model data as a `type`, behavior as functions, and variants as a tagged union.";
 
+/**
+ * `light-fp/no-oo`: the domain keeps data and behavior apart. Reports
+ * non-ambient class declarations and class expressions, `this`, `enum`,
+ * non-ambient `namespace`, decorators, parameter properties, and object-literal
+ * `get` and `set` accessors.
+ */
 export const noOo: Deno.lint.Rule = {
   create(context) {
     if (layerOf(context.filename, context.sourceCode) === "adapter") return {};

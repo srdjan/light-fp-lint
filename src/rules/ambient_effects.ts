@@ -154,6 +154,14 @@ const capabilityOf = (name: string): string | undefined =>
     firstCapability(AMBIENT_MEMBERS[name]) ??
     AMBIENT_CONSTRUCTORS[name];
 
+/**
+ * `light-fp/no-ambient-effects`: a domain file reaches no ambient effect
+ * directly. Reports a closed set of unshadowed names - objects such as `Deno`,
+ * `process`, and `console`, free functions such as `fetch` and the timers,
+ * members such as `Date.now` and `Math.random`, and constructors such as
+ * `new Date()` and `new WebSocket` - and names the capability to inject
+ * instead.
+ */
 export const noAmbientEffects: Deno.lint.Rule = {
   create(context) {
     if (layerOf(context.filename, context.sourceCode) === "adapter") return {};

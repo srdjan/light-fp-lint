@@ -29,6 +29,12 @@ const CONTROL_FLOW: Readonly<Record<string, string>> = {
   BlockStatement: "a bare block",
 };
 
+/**
+ * `light-fp/pure-module`: importing a domain module runs nothing. Reports
+ * module-level `let` and `var`, top-level `await` and control flow, and calls,
+ * construction, or tagged templates that execute at module scope, including
+ * inside exported initializers. Anything inside a function body is fine.
+ */
 export const pureModule: Deno.lint.Rule = {
   create(context) {
     if (layerOf(context.filename, context.sourceCode) === "adapter") return {};

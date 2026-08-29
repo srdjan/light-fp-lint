@@ -11,6 +11,11 @@
 
 import { headerComments } from "./comments.ts";
 
+/**
+ * The contract a file is held to. `domain` is the strict default; `adapter` is
+ * where effects are allowed to live; `prelude` defines `Result` and the effect
+ * brands, so it may throw and cast.
+ */
 export type Layer = "domain" | "adapter" | "prelude";
 
 export const LAYERS: readonly Layer[] = ["domain", "adapter", "prelude"];

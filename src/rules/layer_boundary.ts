@@ -14,6 +14,13 @@ export const namesAdapter = (specifier: string): boolean =>
 const isRelative = (specifier: string): boolean =>
   specifier.startsWith(".") || specifier.startsWith("/");
 
+/**
+ * `light-fp/layer-boundary`: domain code names no adapter, in any import form -
+ * plain imports, re-exports, `export *`, dynamic `import()`, and side-effect
+ * imports. The rule also reports a malformed `@light-fp` pragma, which it must
+ * do from every layer, because an unreadable pragma leaves the file in the
+ * fail-closed domain layer.
+ */
 export const layerBoundary: Deno.lint.Rule = {
   create(context) {
     // This rule runs everywhere, because reporting a malformed pragma is its job
