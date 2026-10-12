@@ -262,6 +262,14 @@ type ReadonlyADT =
   | { readonly _tag: "B" }; // fine
 ```
 
+Members of a literal that is the single argument of `Readonly<{ ... }>` already
+count as readonly and are not reported. The wrapper itself is reported as
+redundant, because the convention is `readonly` on each member and no outer
+`Readonly<>`. The fix drops the wrapper and adds `readonly` to every member that
+lacks it. The rule skips this report when a method, call, construct, or accessor
+member is present, and for `Readonly<Ref>`, `Readonly<A | B>`, and
+`Readonly<Record<...>>`. Nested wrappers can need two `--fix` passes.
+
 Function parameter and return annotations are not reported, including method,
 function-property, call-signature, and constructor annotations nested inside a
 data declaration. Requiring `readonly` on every parameter would be the noisiest

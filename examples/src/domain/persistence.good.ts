@@ -15,17 +15,17 @@ import {
   type WithCapability,
 } from "./shared/primitives.ts";
 
-export type UserRecord = Readonly<{
+export type UserRecord = {
   readonly email: string;
   readonly roles: readonly string[];
-}>;
+};
 
-export type UserRow = UserRecord & Readonly<{ readonly id: number }>;
+export type UserRow = UserRecord & { readonly id: number };
 
-export type UserRepositoryPort = Readonly<{
+export type UserRepositoryPort = {
   readonly insert: (record: UserRecord) => Promise<number>;
   readonly findByRole: (role: string) => Promise<readonly UserRow[]>;
-}>;
+};
 
 export type PersistenceError =
   | {

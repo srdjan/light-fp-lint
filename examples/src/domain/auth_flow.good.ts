@@ -20,10 +20,10 @@ type Email = string & { readonly Email: unique symbol };
 
 type Password = string & { readonly Password: unique symbol };
 
-export type Credentials = Readonly<{
+export type Credentials = {
   readonly email: string;
   readonly password: string;
-}>;
+};
 
 export type AuthError =
   | { readonly type: "InvalidEmail"; readonly reason: string }
@@ -32,22 +32,22 @@ export type AuthError =
   | { readonly type: "WrongPassword"; readonly email: string }
   | { readonly type: "TokenIssueFailed"; readonly cause: string };
 
-export type UserRecord = Readonly<{
+export type UserRecord = {
   readonly id: number;
   readonly email: Email;
   readonly passwordHash: string;
   readonly roles: readonly string[];
   readonly isLocked: boolean;
-}>;
+};
 
-export type LoginSuccess = Readonly<{
+export type LoginSuccess = {
   readonly token: string;
   readonly issuedAt: number;
   readonly userId: number;
   readonly roles: readonly string[];
-}>;
+};
 
-export type LoginPorts = Readonly<{
+export type LoginPorts = {
   readonly clock: () => number;
   readonly hashPassword: (plain: Password) => Promise<string>;
   readonly verifyPassword: (
@@ -61,7 +61,7 @@ export type LoginPorts = Readonly<{
       readonly issuedAt: number;
     },
   ) => Promise<string>;
-}>;
+};
 
 export type AuthPlan = WithCapability<
   "AuthIO",

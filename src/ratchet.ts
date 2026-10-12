@@ -17,11 +17,11 @@ export type Baseline = Readonly<Record<string, number>>;
 export type CountDiagnostics = (path: string, source: string) => number;
 
 /** One file whose violation count moved between two measurements. */
-export type FileDelta = Readonly<{
+export type FileDelta = {
   readonly file: string;
   readonly was: number;
   readonly now: number;
-}>;
+};
 
 /**
  * The result of comparing a measurement against a baseline. `Improved` is a

@@ -141,6 +141,56 @@ assertFix(
   `type A = { readonly [k: string]: string };`,
 );
 
+assertFix(
+  "members of a Readonly literal are left alone, and the wrapper is dropped",
+  `type A = Readonly<{ a: string; readonly b: number }>;`,
+  `type A = { readonly a: string; readonly b: number };`,
+);
+
+assertFix(
+  "a Readonly literal with an index signature loses its wrapper",
+  `type A = Readonly<{ [k: string]: string }>;`,
+  `type A = { readonly [k: string]: string };`,
+);
+
+assertFix(
+  "nested Readonly literals end type-identical",
+  `type A = Readonly<{ a: Readonly<{ b: string }> }>;`,
+  `type A = { readonly a: { readonly b: string } };`,
+);
+
+assertFix(
+  "a Readonly literal keeps its wrapper when a method is present",
+  `type A = Readonly<{ a: string; load(): void }>;`,
+  `type A = Readonly<{ a: string; load(): void }>;`,
+);
+
+assertFix(
+  "Readonly around a type reference is not rewritten",
+  `type A = Readonly<SomeType>;\ntype B = Readonly<Record<string, string>>;`,
+  `type A = Readonly<SomeType>;\ntype B = Readonly<Record<string, string>>;`,
+);
+
+// The wrapper stays, because its argument is a union, not a literal. The union
+// members are ordinary data positions, so they still gain their own `readonly`.
+assertFix(
+  "Readonly around a union keeps its wrapper and marks the members",
+  `type A = Readonly<{ a: string } | { b: string }>;`,
+  `type A = Readonly<{ readonly a: string } | { readonly b: string }>;`,
+);
+
+Deno.test("fix: a single Readonly fix is valid TypeScript before the next pass", () => {
+  const source = `type A = Readonly<{ a: Readonly<{ b: string }> }>;`;
+  const edits = nonOverlappingEdits(diagnose(source, DOMAIN).flatMap(editsFor));
+  const once = applyEdits(source, edits);
+  // `diagnose` throws on a syntax error, so a parse failure fails this test.
+  diagnose(once, DOMAIN);
+  assertEquals(
+    applyFixes(once),
+    `type A = { readonly a: { readonly b: string } };`,
+  );
+});
+
 // The previous rule set emitted `type User { ... };` here, dropping the `=`.
 // Deno rejected the edit as a syntax error and silently applied nothing, so the
 // documented auto-fix workflow could never have worked.

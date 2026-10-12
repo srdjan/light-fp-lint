@@ -1,6 +1,6 @@
 import { assertEquals } from "@std/assert";
 import plugin from "../src/mod.ts";
-import { DOMAIN } from "./harness.ts";
+import { ADAPTER, DOMAIN } from "./harness.ts";
 
 const diagnosticsFor = (
   rule: string,
@@ -142,4 +142,92 @@ export const value = 1;`;
 export const value = 1;`;
   assertEquals(diagnosticsFor("no-unsafe-cast", prose).length, 0);
   assertEquals(diagnosticsFor("no-unsafe-cast", suppression).length, 1);
+});
+
+const redundantWrapper = (source: string): number =>
+  diagnosticsFor("readonly-data", source).filter((diagnostic) =>
+    diagnostic.message.includes("redundant")
+  ).length;
+
+Deno.test("readonly-data: members of a Readonly<{}> literal count as readonly", () => {
+  const sources = [
+    `type A = Readonly<{ a: string; b: number }>;`,
+    `type A = Readonly<{ [k: string]: string }>;`,
+    `type A = Readonly<{ a: string; load(): void }>;`,
+    `interface Box { readonly item: Readonly<{ a: string }> }`,
+  ];
+  for (const source of sources) {
+    const members = diagnosticsFor("readonly-data", source).filter(
+      (diagnostic) => !diagnostic.message.includes("redundant"),
+    );
+    assertEquals(members.length, 0, source);
+  }
+});
+
+Deno.test("readonly-data: Readonly is shallow, so nested plain literals still report", () => {
+  const source = `type A = Readonly<{ a: { b: string } }>;`;
+  const members = diagnosticsFor("readonly-data", source).filter(
+    (diagnostic) => !diagnostic.message.includes("redundant"),
+  );
+  assertEquals(members.length, 1);
+});
+
+Deno.test("readonly-data: an outer Readonly around a pure data literal is redundant", () => {
+  const reported = [
+    `type A = Readonly<{ a: string }>;`,
+    `type A = Readonly<{ readonly a: string }>;`,
+    `type A = Readonly<{ [k: string]: string }>;`,
+    `type A = Readonly<{ a: Readonly<{ b: string }> }>;`,
+    `interface A { readonly a: Readonly<{ b: string }> }`,
+  ];
+  for (const source of reported) {
+    assertEquals(
+      redundantWrapper(source) > 0,
+      true,
+      source,
+    );
+  }
+});
+
+Deno.test("readonly-data: Readonly stays unreported when the rewrite would change the type", () => {
+  const silent = [
+    `type A = Readonly<{ a: string; load(): void }>;`,
+    `type A = Readonly<{ (x: string): void }>;`,
+    `type A = Readonly<{ new (x: string): A }>;`,
+    `type A = Readonly<{ get a(): string }>;`,
+    `type A = Readonly<SomeType>;`,
+    `type A = Readonly<{ a: string } | { b: string }>;`,
+    `type A = Readonly<Record<string, string>>;`,
+    `type A = Readonly<{ a: string }, string>;`,
+  ];
+  for (const source of silent) {
+    assertEquals(redundantWrapper(source), 0, source);
+  }
+});
+
+Deno.test("readonly-data: the redundant wrapper respects the layer and callable gates", () => {
+  const source = `type A = Readonly<{ a: string }>;`;
+  assertEquals(redundantWrapper(`export type A = Readonly<{ a: string }>;`), 1);
+  assertEquals(
+    diagnosticsFor("readonly-data", source, ADAPTER).length,
+    0,
+    "adapter files are skipped",
+  );
+  assertEquals(
+    redundantWrapper(
+      `export const f = (input: Readonly<{ a: string }>) => input;`,
+    ),
+    0,
+    "parameter annotations are outside the data policy",
+  );
+  assertEquals(
+    redundantWrapper(`type H = (input: Readonly<{ a: string }>) => void;`),
+    0,
+    "callable types are outside the data policy",
+  );
+  assertEquals(
+    redundantWrapper(`declare interface Amb { a: Readonly<{ b: string }> }`),
+    0,
+    "ambient declarations are skipped",
+  );
 });

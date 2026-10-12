@@ -13,36 +13,34 @@ import {
   type WithCapability,
 } from "./shared/primitives.ts";
 
-type RawSignup = Readonly<{
+type RawSignup = {
   readonly name?: string;
   readonly email?: string;
   readonly roles?: readonly string[];
   readonly birthDateISO?: string;
-}>;
+};
 
-type ValidationError = Readonly<
-  {
-    readonly field: "email" | "password" | "name" | "birthDate";
-    readonly message: string;
-  }
->;
+type ValidationError = {
+  readonly field: "email" | "password" | "name" | "birthDate";
+  readonly message: string;
+};
 
-type NormalizedSignup = Readonly<{
+type NormalizedSignup = {
   readonly name: string;
   readonly email: string;
   readonly roles: readonly string[];
   readonly birthDateISO: string;
-}>;
+};
 
-export type PersistenceDraft = Readonly<{
+export type PersistenceDraft = {
   readonly name: string;
   readonly email: string;
   readonly roles: readonly string[];
   readonly birthDateISO: string;
   readonly createdAt: number;
-}>;
+};
 
-type ClockCapability = Readonly<{ readonly clock: () => number }>;
+type ClockCapability = { readonly clock: () => number };
 
 const ensureEmail = (
   value?: string,

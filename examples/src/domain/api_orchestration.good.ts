@@ -18,21 +18,21 @@ import {
 
 type HttpMethod = "GET" | "POST";
 
-export type HttpRequest = Readonly<{
+export type HttpRequest = {
   readonly method: HttpMethod;
   readonly path: string;
   readonly headers: Readonly<Record<string, string>>;
   readonly body?: unknown;
-}>;
+};
 
-export type HttpResponse = Readonly<{
+export type HttpResponse = {
   readonly status: number;
   readonly json: () => Promise<unknown>;
-}>;
+};
 
-export type HttpCapability = Readonly<
-  { readonly request: (input: HttpRequest) => Promise<HttpResponse> }
->;
+export type HttpCapability = {
+  readonly request: (input: HttpRequest) => Promise<HttpResponse>;
+};
 
 export type ApiError =
   | { readonly type: "Unauthorized"; readonly message: string }

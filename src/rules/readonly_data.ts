@@ -14,6 +14,8 @@ const CALLABLE_TYPES = new Set([
   "TSConstructorType",
 ]);
 
+type PropertyLike = Deno.lint.TSPropertySignature | Deno.lint.TSIndexSignature;
+
 const MUTABLE_COLLECTIONS: Readonly<Record<string, string>> = {
   Array: "ReadonlyArray",
   Map: "ReadonlyMap",
@@ -55,6 +57,56 @@ export const readonlyData: Deno.lint.Rule = {
     const isCallableProperty = (node: Deno.lint.TSPropertySignature): boolean =>
       node.typeAnnotation?.typeAnnotation.type === "TSFunctionType";
 
+    // The literal inside `Readonly<{ ... }>`, when that is the only argument.
+    const readonlyLiteralOf = (
+      node: Deno.lint.Node | undefined,
+    ): Deno.lint.TSTypeLiteral | undefined => {
+      const [only, ...rest] = node?.type === "TSTypeReference" &&
+          node.typeName.type === "Identifier" &&
+          node.typeName.name === "Readonly"
+        ? node.typeArguments?.params ?? []
+        : [];
+      return only?.type === "TSTypeLiteral" && rest.length === 0
+        ? only
+        : undefined;
+    };
+
+    // `Readonly<{ ... }>` makes every member of its literal readonly, so those
+    // members need no marker of their own. The ancestors of a member are its
+    // literal, the type-argument list, and then the `Readonly` reference.
+    const isReadonlyWrapped = (node: PropertyLike): boolean => {
+      const ancestors = context.sourceCode.getAncestors(node);
+      return readonlyLiteralOf(ancestors.at(-3)) === ancestors.at(-1);
+    };
+
+    // The wrapper is redundant only when dropping it is type-identical: every
+    // member is a property or index signature. A method, call, construct, or
+    // accessor member is not made readonly by `readonly`.
+    const wrappedDataLiteral = (
+      node: Deno.lint.TSTypeReference,
+    ): Deno.lint.TSTypeLiteral | undefined => {
+      const literal = readonlyLiteralOf(node);
+      return literal?.members.every(isPropertyLike) ? literal : undefined;
+    };
+
+    const isPropertyLike = (
+      member: Deno.lint.TSTypeLiteral["members"][number],
+    ): member is PropertyLike =>
+      member.type === "TSPropertySignature" ||
+      member.type === "TSIndexSignature";
+
+    const unwrapEdits = (
+      node: Deno.lint.TSTypeReference,
+      literal: Deno.lint.TSTypeLiteral,
+      fixer: Deno.lint.Fixer,
+    ) => [
+      fixer.removeRange([node.range[0], literal.range[0]]),
+      ...literal.members.filter(isPropertyLike)
+        .filter((member) => !member.readonly)
+        .map((member) => fixer.insertTextBefore(member, "readonly ")),
+      fixer.removeRange([literal.range[1], node.range[1]]),
+    ];
+
     const readonlyArrayText = (node: Deno.lint.Node): string => {
       if (node.type !== "TSArrayType") return context.sourceCode.getText(node);
       const element = node.elementType;
@@ -86,7 +138,7 @@ export const readonlyData: Deno.lint.Rule = {
 
       TSPropertySignature(node) {
         if (inAmbient() || isCallableProperty(node)) return;
-        if (!inData() || node.readonly) return;
+        if (!inData() || node.readonly || isReadonlyWrapped(node)) return;
         context.report({
           node: node.key,
           message: "Data properties are readonly.",
@@ -97,6 +149,7 @@ export const readonlyData: Deno.lint.Rule = {
 
       TSIndexSignature(node) {
         if (inAmbient() || !inData() || node.readonly) return;
+        if (isReadonlyWrapped(node)) return;
         context.report({
           node,
           message: "Index signatures in data types are readonly.",
@@ -127,6 +180,16 @@ export const readonlyData: Deno.lint.Rule = {
       },
 
       TSTypeReference(node) {
+        const literal = wrappedDataLiteral(node);
+        if (literal && !inAmbient() && inData()) {
+          context.report({
+            node: node.typeName,
+            message: "Readonly<{ ... }> around a type literal is redundant.",
+            hint:
+              "Mark each member `readonly` and drop the Readonly<> wrapper.",
+            fix: (fixer) => unwrapEdits(node, literal, fixer),
+          });
+        }
         if (node.typeName.type !== "Identifier") return;
         const replacement = MUTABLE_COLLECTIONS[node.typeName.name];
         if (!replacement) return;

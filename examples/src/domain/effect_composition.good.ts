@@ -32,9 +32,7 @@ import {
   type UserRepositoryPort,
 } from "./persistence.good.ts";
 
-type Profile = Readonly<
-  { readonly email: string; readonly roles: readonly string[] }
->;
+type Profile = { readonly email: string; readonly roles: readonly string[] };
 
 // A type guard narrows once, in one place, and gives the rest of the function a
 // real type. A cast would assert the same thing without checking it.
@@ -70,15 +68,16 @@ const decodeProfile = (payload: unknown): Result<ApiError, Profile> => {
 
 export type CompositeError = AuthError | ApiError | PersistenceError;
 
-type OnboardingPorts = Readonly<{
+type OnboardingPorts = {
   readonly auth: LoginPorts;
   readonly http: HttpCapability;
   readonly repo: UserRepositoryPort;
-}>;
+};
 
-type OnboardingSuccess = Readonly<
-  { readonly token: string; readonly storedUserId: number }
->;
+type OnboardingSuccess = {
+  readonly token: string;
+  readonly storedUserId: number;
+};
 
 export type OnboardingEffect = WithCapability<
   "Onboarding",
