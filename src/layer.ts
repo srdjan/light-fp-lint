@@ -161,7 +161,7 @@ export function readPragma(sourceCode: Deno.lint.SourceCode): PragmaLookup {
     if (token === undefined) continue;
     return isLayer(token)
       ? { kind: "valid", layer: token, range: comment.range }
-      : { kind: "invalid", token, range: comment.range };
+      : { kind: "invalid", token: token, range: comment.range };
   }
   return { kind: "none" };
 }

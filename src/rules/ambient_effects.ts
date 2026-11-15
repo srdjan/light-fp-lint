@@ -1,6 +1,6 @@
 // @light-fp adapter -- a lint rule adapts Deno's visitor API: it reports through a
 // void callback and is driven by mutation it does not own.
-import { childValuesOf } from "../ast.ts";
+import { localBindings } from "../ast.ts";
 import { layerOf } from "../layer.ts";
 
 /** Ambient objects the domain must never reach. */
@@ -52,83 +52,6 @@ const AMBIENT_CONSTRUCTORS: Readonly<Record<string, string>> = {
   XMLHttpRequest: "an Http capability",
   EventSource: "an Events capability",
   BroadcastChannel: "a Channel capability",
-};
-
-type SyntaxNode = Deno.lint.Node | Deno.lint.TSParameterProperty;
-
-const isNode = (value: unknown): value is SyntaxNode =>
-  typeof value === "object" &&
-  value !== null &&
-  "type" in value &&
-  typeof value.type === "string";
-
-const localBindings = (ast: Deno.lint.Program): ReadonlySet<string> => {
-  const names = new Set<string>();
-  const visited = new Set<SyntaxNode>();
-
-  const addPattern = (node: SyntaxNode | null): void => {
-    if (!node) return;
-    if (node.type === "Identifier") {
-      names.add(node.name);
-      return;
-    }
-    if (node.type === "AssignmentPattern") {
-      addPattern(node.left);
-      return;
-    }
-    if (node.type === "RestElement") {
-      addPattern(node.argument);
-      return;
-    }
-    if (node.type === "ArrayPattern") {
-      for (const element of node.elements) addPattern(element);
-      return;
-    }
-    if (node.type === "ObjectPattern") {
-      for (const property of node.properties) {
-        addPattern(property.type === "Property" ? property.value : property);
-      }
-      return;
-    }
-    if (node.type === "TSParameterProperty") addPattern(node.parameter);
-  };
-
-  const visit = (value: unknown): void => {
-    if (Array.isArray(value)) {
-      for (const item of value) visit(item);
-      return;
-    }
-    if (!isNode(value) || visited.has(value)) return;
-    visited.add(value);
-
-    if (
-      value.type === "ImportSpecifier" ||
-      value.type === "ImportDefaultSpecifier" ||
-      value.type === "ImportNamespaceSpecifier"
-    ) {
-      names.add(value.local.name);
-    } else if (value.type === "VariableDeclarator") {
-      addPattern(value.id);
-    } else if (value.type === "FunctionDeclaration") {
-      if (value.id) names.add(value.id.name);
-      for (const parameter of value.params) addPattern(parameter);
-    } else if (
-      value.type === "FunctionExpression" ||
-      value.type === "ArrowFunctionExpression"
-    ) {
-      if (value.type === "FunctionExpression" && value.id) {
-        names.add(value.id.name);
-      }
-      for (const parameter of value.params) addPattern(parameter);
-    }
-
-    for (const child of childValuesOf(value)) {
-      visit(child);
-    }
-  };
-
-  visit(ast);
-  return names;
 };
 
 const nameOf = (node: Deno.lint.Node | null | undefined): string | undefined =>

@@ -62,7 +62,7 @@ function decodeProfile(payload: unknown): Result<ApiError, Profile> {
     });
   }
   return ok({
-    email,
+    email: email,
     roles: roles.filter((role): role is string => typeof role === "string"),
   });
 }

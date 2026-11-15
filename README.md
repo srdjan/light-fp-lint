@@ -449,6 +449,23 @@ position, and unary `-`, `!`, `~`, and `typeof` stay allowed. The `RegExp` name
 belongs to `ambient-names`, and `new RegExp(...)` already reports as `new`. An
 assignment or a sequence in a `for` header belongs to `statement-forms`.
 
+### `light-fp/record-forms`
+
+Domain code builds each record from explicit `key: value` fields and at most one
+leading spread.
+
+| Refused form                                                          | Write instead                                            | ZTS code |
+| --------------------------------------------------------------------- | -------------------------------------------------------- | -------- |
+| A shorthand property, `{ value }`                                     | `{ value: value }`                                       | ZTS001   |
+| A method property, `{ run() {} }`                                     | A field that holds an arrow, `{ run: (x: T): R => ... }` | ZTS001   |
+| A computed key, `{ [k]: v }`                                          | A literal field name, or `Object.fromEntries`            | ZTS001   |
+| A numeric key, `{ 1: "a" }`                                           | A string key, or an array for dense indices              | ZTS001   |
+| A spread that is not the first member, `{ x: 1, ...base }`            | One leading spread, `{ ...base, x: 1 }`                  | ZTS614   |
+| `Object.assign`, `Object.freeze`, `Object.isFrozen` (global `Object`) | Object spread, `{ ...base, key: value }`                 | ZTS001   |
+
+A getter and a setter belong to `no-oo`. A shorthand property or a spread in an
+object pattern belongs to `declaration-forms`. An array spread stays allowed.
+
 ## Suppressing a rule
 
 ```ts

@@ -80,7 +80,7 @@ function buildAuditRequest(
         authorization: bearer(token),
         "content-type": "application/json",
       },
-      body: { ...event, issuedAt },
+      body: { ...event, issuedAt: issuedAt },
     });
 }
 

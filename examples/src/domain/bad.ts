@@ -35,4 +35,6 @@ export const record = (input: unknown) => { // declaration-forms: an exported fu
 export const pattern = "\\d+"; // fine: an escaped backslash
 export const label = "a\qb"; // lexical-forms: \q is not an allowed escape
 
+export const fields = { pattern }; // record-forms: a shorthand property
+
 export default make; // module-forms: a default export

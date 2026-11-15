@@ -49,6 +49,8 @@ export function statementProbe(flag: boolean): void {
   }
 }
 
+export const recordProbe = { run() {} };
+
 export function operatorProbe(left: number, right: number): boolean {
   return left == right;
 }

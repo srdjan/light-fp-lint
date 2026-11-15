@@ -127,7 +127,7 @@ export function parseGitVersion(output: string): GitVersion {
   if (![major, minor, patch].every(Number.isSafeInteger)) {
     return { _tag: "InvalidGitVersion", observed: output };
   }
-  return { _tag: "GitVersion", major, minor, patch };
+  return { _tag: "GitVersion", major: major, minor: minor, patch: patch };
 }
 
 export function hookState(entries: readonly HookConfigEntry[]): HookState {
@@ -236,13 +236,13 @@ export function decideHookAction(
     (command._tag === "Install" || command._tag === "Uninstall") &&
     (version._tag === "InvalidGitVersion" || !versionAtLeast(version))
   ) {
-    return { _tag: "UnsupportedGit", version };
+    return { _tag: "UnsupportedGit", version: version };
   }
   if (
     command._tag === "Status" && state._tag === "Installed" &&
     version._tag === "GitVersion" && !versionAtLeast(version)
   ) {
-    return { _tag: "InstalledButInactive", version };
+    return { _tag: "InstalledButInactive", version: version };
   }
 
   if (command._tag === "Install") return installDecision(state);

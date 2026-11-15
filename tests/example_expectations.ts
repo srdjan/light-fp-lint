@@ -69,6 +69,7 @@ export const expectedExampleDiagnostics: Readonly<
     "light-fp/readonly-data",
     "light-fp/readonly-data",
     "light-fp/readonly-data",
+    "light-fp/record-forms",
   ],
   "domain/effect_composition.bad.ts": [
     "light-fp/function-forms",
