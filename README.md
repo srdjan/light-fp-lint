@@ -6,7 +6,8 @@
 
 A Deno lint plugin for Light Functional Programming in TypeScript: module-scope
 purity checks, explicit error-as-value conventions, readonly data declarations,
-and a hexagonal boundary between domain and adapters.
+a hexagonal boundary between domain and adapters, and one spelling for each
+construct, taken from the zts-model-1 TypeScript profile.
 
 ## Contents
 
@@ -33,9 +34,11 @@ the rules enforce this syntactic contract:
 - imports do not name a recognised adapter segment, and direct uses of the
   plugin's ambient-effect vocabulary are reported;
 - explicit `throw`, `try`, and discarded values are reported;
-- data declarations use readonly syntax; and
+- data declarations use readonly syntax;
 - `as` expressions are limited to `as const` and top-level types declared in the
-  same file; angle-bracket casts, non-null assertions, and `any` report.
+  same file; angle-bracket casts, non-null assertions, and `any` report; and
+- the [restriction rules](#restriction-rules) hold: each construct has one
+  spelling, and the file reads no global name outside a closed set.
 
 The linter proves shapes. It cannot prove properties, so the gate has three legs
 and needs all of them:
@@ -176,13 +179,15 @@ import type { HttpPort } from "../ports/http.ts"; // fine
 
 Importing a domain module runs nothing. Reports module-level `let` and `var`,
 top-level `await` and control flow, and calls, construction, or tagged templates
-that execute at module scope, including inside exported initializers. Anything
-inside a function body is fine, including `let` and deterministic construction.
+that execute at module scope, including inside exported initializers. Inside a
+function body, `let` is fine. `operator-forms` refuses `new` in every position.
 
 ```ts
 export const cache = new Map(); // reported: construction runs on import
 main(); // reported
-export const makeCache = () => new Map(); // fine
+export function emptyCache(): Cache {
+  return { entries: [] };
+} // fine
 ```
 
 ### `light-fp/no-ambient-effects`
@@ -205,7 +210,8 @@ A local or imported binding with one of these names is treated as an injected
 capability and is not reported.
 
 The rule does not report `new Date(ms)`, `Math.max`, `JSON.parse`,
-`structuredClone`, or `new Map`.
+`structuredClone`, or `new Map`. In domain files, `operator-forms` reports each
+`new`, and `ambient-names` reports `JSON.parse` and `structuredClone`.
 
 ```ts
 const ambientStamp = Date.now(); // reported
@@ -216,12 +222,13 @@ const injectedStamp = ports.clock.now(); // fine
 
 Reports `throw` and `try` alike, pushing explicit domain failure toward returned
 values that `deno check` can propagate. The rule has no type or cross-file
-information, so it cannot prove that an imported call will not throw.
-`new Error(...)` as a value inside `err(...)` is data and is fine.
+information, so it cannot prove that an imported call will not throw. Domain
+failure is a tagged record, not an `Error`: `operator-forms` refuses `new`, and
+`ambient-names` refuses the global `Error`.
 
 ```ts
 if (!valid) throw new Error("invalid"); // reported
-if (!valid) return err({ _tag: "Invalid", reason }); // fine
+if (!valid) return err({ _tag: "Invalid", reason: reason }); // fine
 ```
 
 ### `light-fp/no-discarded-values`
@@ -289,10 +296,9 @@ export class CartService {
     this.items.push(i);
   }
 } // reported
-export const addItem = (cart: Cart, item: Item): Cart => ({
-  ...cart,
-  items: [...cart.items, item],
-}); // fine
+export function addItem(cart: Cart, item: Item): Cart {
+  return { ...cart, items: [...cart.items, item] };
+} // fine
 ```
 
 ### `light-fp/no-unsafe-cast`
@@ -309,8 +315,10 @@ local by this rule.
 const io = fetchUser(url) as IO<Response>; // reported
 
 type Email = string & { readonly _brand: unique symbol };
-export const parseEmail = (raw: string): Result<ParseError, Email> =>
-  raw.includes("@") ? ok(raw as Email) : err({ _tag: "NotAnEmail" }); // fine
+type RawEmail = string;
+export function parseEmail(raw: RawEmail): Result<ParseError, Email> {
+  return raw.includes("@") ? ok(raw as Email) : err({ _tag: "NotAnEmail" });
+} // fine
 ```
 
 ### `light-fp/prefer-type-for-data`
@@ -696,13 +704,12 @@ These limits are measured against the current implementation:
 - **Ambient-name binding analysis is file-wide, not lexical.** A parameter or
   local declaration with a name such as `fetch` makes that name local for the
   whole file. That can silence a real global use in another scope or before the
-  declaration. Passing a bare ambient object as an argument, such as
-  `use(Deno)`, is also silent; member access and the explicit capture positions
-  documented above are what report.
-- **Construction inside functions is allowed.** Construction at module scope
-  runs during import, so `pure-module` reports `new LocalService()` and
-  `new Map()` there. `no-ambient-effects` separately reports its closed list of
-  named effectful constructors wherever domain code uses them.
+  declaration. `ambient-names` uses the same analysis. Passing a bare ambient
+  object as an argument, such as `use(Deno)`, is silent for
+  `no-ambient-effects`; in domain files, `ambient-names` reports it.
+- **Construction is refused only in domain files.** `operator-forms` reports
+  every `new` in a domain file. In a prelude file, `pure-module` reports
+  construction at module scope, and construction inside a function is allowed.
 - **`no-discarded-values` reports every non-transition expression statement in a
   function.** Assignments, updates, generator `yield`, directive prologues, and
   a required `super()` call are allowed. Calls, awaits, construction, literals,
@@ -718,9 +725,24 @@ These limits are measured against the current implementation:
 - **The real CLI has a file-wide suppression hole.** A bare
   `// deno-lint-ignore-file` silences the plugin before `require-ignore-reason`
   can report it. `runPlugin` sees and counts it.
-- **Exhaustiveness is not checked here.** Give your functions explicit return
-  types and let `deno check` catch unhandled variants. Avoid `default` in a
-  switch over `_tag`, which is precisely what hides a missing variant.
+- **Exhaustiveness is not checked here.** `statement-forms` refuses `switch` in
+  domain files. Use `match` from `ts-pattern` with `.exhaustive()`, or explicit
+  return types, and let `deno check` catch unhandled variants.
+- **Restrictions that need types are not enforced.** Non-boolean conditions,
+  string `+`, dynamic property access `obj[key]`, effectful conditional arms,
+  and `null` handling (ZTS100-106, ZTS605, ZTS612, ZTS624) need type or effect
+  information. The repository file `plans/004-typescript-restrictions.md`
+  classifies every zts-model-1 restriction.
+- **Deno's plugin AST drops a standalone `;` and the statements after it.** This
+  was measured on Deno 2.9.8. `statement-forms` reports the hidden code in
+  domain files. In prelude and adapter files, the hidden code stays invisible to
+  every rule.
+- **Optional-call detection reads source text.** Deno sets `optional` on every
+  node of an optional chain, so `operator-forms` looks for `?.` in the source. A
+  comment between a callee and its `?.` hides an optional call.
+- **Raw exported types are checked on function declarations only.** `type-forms`
+  checks exported `function` declarations. `declaration-forms` already refuses
+  an exported function-valued `const`.
 - **Mutation through an alias is not tracked.** `readonly-data` forces the
   annotations; `deno check` enforces them from there.
 - **Deno 2.2's programmatic lint helper cannot expose source text.** The real

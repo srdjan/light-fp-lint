@@ -129,26 +129,32 @@ defining module. Forging the brand elsewhere then needs a cast, and
 `no-unsafe-cast` reports that cast because the target type is not declared in
 the importing file.
 
-## Why is `new` allowed?
+## Why is `new` refused in domain files?
 
-A blanket ban on `new` fires on `new Map()`, `new Set()`, `new URL()`,
-`new RegExp()`, and `new TextEncoder()`. This plugin treats those as value
-constructors rather than ambient effects.
+The restriction rules adopt the position of the zts-model-1 profile. Constructor
+dispatch hides initialization work behind a call that looks like a value, so
+`operator-forms` reports every `new` in a domain file. Domain code builds values
+with factory functions and object literals. An adapter or the prelude constructs
+platform values such as `Map`, `URL`, or `TextEncoder`, and passes them in.
 
-A rule whose diagnostics are usually wrong teaches people to suppress it, and a
-suppression habit is contagious: the next diagnostic gets suppressed too,
-whether or not it was right. Precision is not a nicety in a lint rule, it is
-what keeps the rule believed.
+`no-ambient-effects` still names the effectful constructors individually.
+Zero-argument `new Date()` reads the clock, and the five platform constructors
+in the README reach external facilities. That rule also applies to the prelude,
+where other construction inside a function is allowed. Construction at module
+scope runs during import, so `pure-module` reports it in every strict layer.
 
-The constructors that are treated as effectful are named individually in
-`no-ambient-effects`: zero-argument `new Date()` reads the clock, and the five
-platform constructors in the README reach external facilities. `new Date(ms)`
-converts a number and is fine.
+## Why does the plugin carry zts-model-1 restrictions?
 
-This allowance applies inside functions. Construction at module scope is a
-different question: it runs during import, so `pure-module` reports it even when
-the constructor itself is deterministic. Export a function that constructs the
-value and let `main.ts` decide when to call it.
+The zts-model-1 profile refuses each construct whose meaning a checker or a
+reader cannot see: hidden coercion, hidden mutation, unbounded loops, implicit
+names, and second spellings. Most of those refusals are syntax, so one file's
+AST decides them without type information. The restriction rules carry over that
+subset to standard TypeScript.
+
+The rules leave out every restriction that needs types, uses ZTS-only syntax
+such as `structural` and `match`, or has no standard TypeScript replacement,
+such as the ban on `async`. They apply to domain files only. An adapter faces
+platform APIs, and the prelude needs `try` and brand casts.
 
 ## Why are callable annotations outside `readonly-data`?
 
@@ -202,9 +208,10 @@ so with a reason attached.
 
 `src/layer.ts` resolves as domain code. Root discovery performs one `Deno.cwd()`
 read inside `try/catch`, so the file carries two signed line suppressions. The
-real CLI honors them and reports the file clean. `Deno.lint.runPlugin` ignores
-them and reports `no-ambient-effects` plus `no-throw`; the ratchet records both
-as debt.
+suppression on the `Deno.cwd()` line names `no-ambient-effects` and
+`ambient-names`. The real CLI honors both suppressions and reports the file
+clean. `Deno.lint.runPlugin` ignores them and reports `no-ambient-effects`,
+`ambient-names`, and `no-throw`; the ratchet records all three as debt.
 
 ## Why are local, CI, and agent enforcement separate?
 

@@ -1,6 +1,6 @@
 # TypeScript restrictions from the zts-model-1 profile
 
-Status: IN PROGRESS
+Status: DONE
 
 ## Goal
 
@@ -213,15 +213,15 @@ expectations, and the same domain files. Parallel units would conflict, and a
 registered rule without compliance fails the gate. The units therefore run in
 sequence, and each rule is one vertical slice with its own commit.
 
-| Unit | Work                                                                                        | Model  | Commits             | Turns |
-| ---- | ------------------------------------------------------------------------------------------- | ------ | ------------------- | ----- |
-| U0   | D4 fix: `Array<T>` to `readonly T[]`, test first                                            | Opus   | 1, done (`3e072d1`) | -     |
-| U1   | `module-forms`, then `lexical-forms`                                                        | Sonnet | 2                   | 60    |
-| U2   | `declaration-forms`, then `function-forms`                                                  | Sonnet | 2                   | 80    |
-| U3   | `statement-forms`, then `operator-forms`                                                    | Sonnet | 2                   | 80    |
-| U4   | `record-forms`, then `type-forms`                                                           | Sonnet | 2                   | 80    |
-| U5   | `ambient-names`                                                                             | Sonnet | 1                   | 60    |
-| U6   | README overview, guarantees, limits, and examples; `q_and_a.md`; `skills/light-fp/SKILL.md` | Opus   | 1                   | -     |
+| Unit | Work                                                                                                         | Model  | Commits                                       | Turns |
+| ---- | ------------------------------------------------------------------------------------------------------------ | ------ | --------------------------------------------- | ----- |
+| U0   | D4 fix: `Array<T>` to `readonly T[]`, test first                                                             | Opus   | 1, done (`3e072d1`)                           | -     |
+| U1   | `module-forms`, then `lexical-forms`                                                                         | Sonnet | 2, done (`1532c38`, `cacee87`)                | 60    |
+| U2   | `declaration-forms`, then `function-forms`                                                                   | Sonnet | 2, done (`1077447`, `5fdbf9d`)                | 80    |
+| U3   | `statement-forms`, then `operator-forms`                                                                     | Sonnet | 2, done (`1137ff4`, `9d2b76a`); fix `e487442` | 80    |
+| U4   | `record-forms`, then `type-forms`                                                                            | Sonnet | 2, done (`e5708fa`, `06ee57f`)                | 80    |
+| U5   | `ambient-names`                                                                                              | Sonnet | 1, done (`662b763`)                           | 60    |
+| U6   | README overview, guarantees, limits, and examples; `q_and_a.md`; `skills/light-fp/SKILL.md` needed no change | Opus   | 1, done                                       | -     |
 
 Opus reviews each commit line by line and runs `deno task ci` itself before it
 dispatches the next unit.
