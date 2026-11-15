@@ -38,3 +38,7 @@ export const commentLikeProbe = "// deno-lint-ignore light-fp/no-throw";
 export const missingReasonProbe = 0;
 
 export const declarationProbe = (): number => 1;
+
+export function functionProbe(count: number = 1): number {
+  return count;
+}

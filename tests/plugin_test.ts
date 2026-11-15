@@ -5,6 +5,7 @@ Deno.test("plugin: exposes the documented rule set", () => {
   assertEquals(plugin.name, "light-fp");
   assertEquals(Object.keys(plugin.rules).toSorted(), [
     "declaration-forms",
+    "function-forms",
     "layer-boundary",
     "lexical-forms",
     "module-forms",
@@ -28,6 +29,7 @@ Deno.test("plugin: every rule reports with a hint", () => {
     "module-forms": `export default 1;`,
     "lexical-forms": `export const a = "a\\qb";`,
     "declaration-forms": `export const f = () => 1;`,
+    "function-forms": `export function f(a = 1): number { return a; }`,
     "pure-module": `let n = 0;`,
     "no-ambient-effects": `export const now = Date.now();`,
     "no-throw": `export const f = () => { throw new Error("x"); };`,

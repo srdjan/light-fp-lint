@@ -373,6 +373,24 @@ Domain code binds each name on its own and declares each function with a
 | `const f = () => ...`, `const f = function ...`, `let f = () => ...`    | `function f(...): T { ... }`                      | ZTS608   |
 | `export const f = () => ...`                                            | `export function f(...): T { ... }`               | ZTS609   |
 
+### `light-fp/function-forms`
+
+Domain code declares each function by name with a full signature, and each call
+lists its arguments one by one.
+
+| Refused form                                                                   | Write instead                                                              | ZTS code |
+| ------------------------------------------------------------------------------ | -------------------------------------------------------------------------- | -------- |
+| A function expression, such as `run(function () { ... })`                      | A function declaration, or an arrow passed directly as a callback argument | ZTS001   |
+| A generator, `function* g() { yield 1; }`                                      | Return an array                                                            | ZTS001   |
+| A default parameter, `function f(a = 1)`                                       | `function f(a: number \| undefined)`, then `const resolved = a ?? 1;`      | ZTS054   |
+| An optional parameter, `function f(a?: number)`, also in a type or signature   | `function f(a: number \| undefined)`                                       | ZTS055   |
+| A rest parameter, `function f(...rest: number[])`, also in a type or signature | `function f(rest: readonly number[])`                                      | ZTS001   |
+| A call-site spread, `f(...args)`, `new F(...args)`                             | Pass positional arguments                                                  | ZTS616   |
+| A function declaration without a type on each parameter and on its return      | `function f(a: number): number { ... }`                                    | ZTS601   |
+
+A function expression bound to a `const` belongs to `declaration-forms`. An
+object method belongs to `record-forms`, and a class method belongs to `no-oo`.
+
 ## Suppressing a rule
 
 ```ts

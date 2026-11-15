@@ -43,7 +43,7 @@ export type PersistenceDraft = {
 type ClockCapability = { readonly clock: () => number };
 
 function ensureEmail(
-  value?: string,
+  value: string | undefined,
 ): Result<readonly ValidationError[], string> {
   if (!value) return err([{ field: "email", message: "Required" }]);
   const trimmed = value.trim().toLowerCase();
@@ -54,7 +54,7 @@ function ensureEmail(
 }
 
 function ensureName(
-  value?: string,
+  value: string | undefined,
 ): Result<readonly ValidationError[], string> {
   if (!value) return err([{ field: "name", message: "Required" }]);
   if (value.length > 80) return err([{ field: "name", message: "Too long" }]);
@@ -62,7 +62,7 @@ function ensureName(
 }
 
 function ensureBirthDate(
-  value?: string,
+  value: string | undefined,
 ): Result<readonly ValidationError[], string> {
   if (!value) {
     return err([{ field: "birthDate", message: "Required ISO string" }]);
@@ -73,7 +73,7 @@ function ensureBirthDate(
 }
 
 function ensureRoles(
-  value?: readonly string[],
+  value: readonly string[] | undefined,
 ): Result<readonly ValidationError[], readonly string[]> {
   if (!value || value.length === 0) return ok(["user"]);
   const normalized = Array.from(

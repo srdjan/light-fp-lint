@@ -39,6 +39,7 @@ import { noOo } from "./rules/no_oo.ts";
 import { noUnsafeCast } from "./rules/no_unsafe_cast.ts";
 import { preferTypeForData } from "./rules/prefer_type_for_data.ts";
 import { declarationForms } from "./rules/declaration_forms.ts";
+import { functionForms } from "./rules/function_forms.ts";
 import { lexicalForms } from "./rules/lexical_forms.ts";
 import { moduleForms } from "./rules/module_forms.ts";
 import { requireIgnoreReason } from "./rules/require_ignore_reason.ts";
@@ -63,6 +64,7 @@ const plugin: Deno.lint.Plugin = {
     "module-forms": moduleForms,
     "lexical-forms": lexicalForms,
     "declaration-forms": declarationForms,
+    "function-forms": functionForms,
     // Supporting: house style rather than soundness.
     "prefer-type-for-data": preferTypeForData,
     // Meta: keeps the escape hatches visible.
@@ -74,6 +76,7 @@ export default plugin;
 
 export {
   declarationForms,
+  functionForms,
   layerBoundary,
   lexicalForms,
   moduleForms,

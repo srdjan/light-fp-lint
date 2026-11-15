@@ -8,6 +8,8 @@ export const expectedExampleDiagnostics: Readonly<
   "adapters/persistence.ts": [],
   "adapters/side.ts": [],
   "domain/api_orchestration.bad.ts": [
+    "light-fp/function-forms",
+    "light-fp/function-forms",
     "light-fp/no-ambient-effects",
     "light-fp/no-ambient-effects",
     "light-fp/no-ambient-effects",
@@ -63,6 +65,7 @@ export const expectedExampleDiagnostics: Readonly<
     "light-fp/readonly-data",
   ],
   "domain/effect_composition.bad.ts": [
+    "light-fp/function-forms",
     "light-fp/no-ambient-effects",
     "light-fp/no-discarded-values",
     "light-fp/no-discarded-values",
