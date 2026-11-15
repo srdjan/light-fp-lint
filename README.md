@@ -791,6 +791,7 @@ Individually:
 | `deno task test`           | the full test suite               |
 | `deno task examples:lint`  | diagnostics on the example corpus |
 | `deno task bump <version>` | rewrite every version reference   |
+| `deno task publish`        | publish the package to JSR        |
 
 The plugin lints its own source. `src/layer.ts` resolves as domain code. The
 real CLI reports it clean because two signed line suppressions cover its one
