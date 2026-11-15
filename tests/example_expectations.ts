@@ -47,6 +47,7 @@ export const expectedExampleDiagnostics: Readonly<
   "domain/auth_flow.good.ts": [],
   "domain/bad.ts": [
     "light-fp/layer-boundary",
+    "light-fp/lexical-forms",
     "light-fp/module-forms",
     "light-fp/no-ambient-effects",
     "light-fp/no-discarded-values",

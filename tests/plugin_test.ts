@@ -5,6 +5,7 @@ Deno.test("plugin: exposes the documented rule set", () => {
   assertEquals(plugin.name, "light-fp");
   assertEquals(Object.keys(plugin.rules).toSorted(), [
     "layer-boundary",
+    "lexical-forms",
     "module-forms",
     "no-ambient-effects",
     "no-discarded-values",
@@ -24,6 +25,7 @@ Deno.test("plugin: every rule reports with a hint", () => {
   const sources: Readonly<Record<string, string>> = {
     "layer-boundary": `import { x } from "../adapters/http.ts";`,
     "module-forms": `export default 1;`,
+    "lexical-forms": `export const a = "a\\qb";`,
     "pure-module": `let n = 0;`,
     "no-ambient-effects": `export const now = Date.now();`,
     "no-throw": `export const f = () => { throw new Error("x"); };`,

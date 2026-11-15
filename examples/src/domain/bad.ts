@@ -32,4 +32,7 @@ export const record = (input: unknown) => {
   return input as Foreign; // no-unsafe-cast: Foreign is not declared here
 };
 
+export const pattern = "\\d+"; // fine: an escaped backslash
+export const label = "a\qb"; // lexical-forms: \q is not an allowed escape
+
 export default make; // module-forms: a default export

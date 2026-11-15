@@ -350,6 +350,17 @@ stay with `layer-boundary`.
 | `import { x } from "./mod.ts"; export { x };`               | Export the declaration in the module that owns it       | ZTS002   |
 | `export default ...`, `export { x as default }`             | `export function name(...)` or `export const name`      | ZTS056   |
 
+### `light-fp/lexical-forms`
+
+Domain code writes strings with a closed set of escapes and names identifiers
+with ASCII characters. Legacy octal literals stay with Deno's `no-octal` rule.
+
+| Refused form                                                | Write instead                                                                                                  | ZTS code |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | -------- |
+| An escape outside the closed set, such as `"a\qb"`          | Remove the backslash, or write an allowed escape: ``\n \r \t \b \f \v \0 \\ \' \" \` \$ \xHH \uHHHH \u{H...}`` | ZTS013   |
+| A backslash before a line break inside a string or template | Join the lines, or write `\n`                                                                                  | ZTS045   |
+| An identifier with a character above U+007F, such as `café` | Rename it with ASCII letters, digits, `_`, or `$`                                                              | ZTS046   |
+
 ## Suppressing a rule
 
 ```ts
