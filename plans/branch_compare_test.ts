@@ -30,9 +30,16 @@ const fileBranches = async (path: string): Promise<number> => {
 // costs this many branches. The rederive itself must still cost fewer.
 const READONLY_WRAPPER_BRANCHES = 8;
 
+// The `Array<T>` fix writes `readonly T[]` and parenthesizes loose element
+// types. That behavior also arrived after the rederive.
+const ARRAY_FIX_BRANCHES = 3;
+
 Deno.test("branch compare: original vs rederived readonly-data", async () => {
   const before = await fileBranches("plans/readonly_original_reference.ts");
   const after = await fileBranches("src/rules/readonly_data.ts");
   console.log(`readonly-data branches: original=${before} rederived=${after}`);
-  assertEquals(after < before + READONLY_WRAPPER_BRANCHES, true);
+  assertEquals(
+    after < before + READONLY_WRAPPER_BRANCHES + ARRAY_FIX_BRANCHES,
+    true,
+  );
 });

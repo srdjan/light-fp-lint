@@ -3,6 +3,8 @@ import { readonlyData as rederived } from "../src/rules/readonly_data.ts";
 // Frozen original implementation (plans/readonly_original_reference.ts). The
 // rederived rule must keep producing identical diagnostics and fixes, or this
 // test fails: a rederive that changes behavior is a regression, not a rewrite.
+// `Array<T>` is not in the corpus. Its fix changed on purpose to `readonly T[]`,
+// and tests/fix_test.ts pins that output.
 import { readonlyData as original } from "../plans/readonly_original_reference.ts";
 
 const makePlugin = (rule: Deno.lint.Rule): Deno.lint.Plugin => ({
@@ -46,7 +48,6 @@ const corpus: Readonly<Record<string, readonly [string, string]>> = {
     "type A = { readonly m: Record<string, string[]> };",
     "domain",
   ],
-  "Array generic": ["type A = { readonly xs: Array<string> };", "domain"],
   "Map and Set": [
     "type A = { readonly m: Map<string, number>; readonly s: Set<number> };",
     "domain",
@@ -183,7 +184,6 @@ Deno.test("readonly-data rederive: fixes converge to the same text", () => {
     `type A = { readonly xs: string[] };`,
     `export type B = { readonly a: number[][] };`,
     `type A = { readonly m: Map<string, number> };`,
-    `type A = { readonly xs: Array<string> };`,
     `type A = { [k: string]: string };`,
     `type Data = { xs: string[]; map: Map<string, string>; [key: string]: unknown };`,
   ];

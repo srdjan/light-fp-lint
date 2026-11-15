@@ -17,10 +17,21 @@ const CALLABLE_TYPES = new Set([
 type PropertyLike = Deno.lint.TSPropertySignature | Deno.lint.TSIndexSignature;
 
 const MUTABLE_COLLECTIONS: Readonly<Record<string, string>> = {
-  Array: "ReadonlyArray",
+  Array: "readonly T[]",
   Map: "ReadonlyMap",
   Set: "ReadonlySet",
 };
+
+// An array element type that binds looser than `[]` needs parentheses.
+const LOOSE_TYPES = new Set([
+  "TSUnionType",
+  "TSIntersectionType",
+  "TSFunctionType",
+  "TSConstructorType",
+  "TSConditionalType",
+  "TSTypeOperator",
+  "TSInferType",
+]);
 
 type Frame = Readonly<{
   readonly inData: boolean | undefined;
@@ -107,14 +118,15 @@ export const readonlyData: Deno.lint.Rule = {
       fixer.removeRange([literal.range[1], node.range[1]]),
     ];
 
-    const readonlyArrayText = (node: Deno.lint.Node): string => {
-      if (node.type !== "TSArrayType") return context.sourceCode.getText(node);
-      const element = node.elementType;
-      const elementText = element.type === "TSArrayType"
+    const readonlyArrayText = (node: Deno.lint.Node): string =>
+      node.type === "TSArrayType"
+        ? `readonly ${elementText(node.elementType)}[]`
+        : context.sourceCode.getText(node);
+
+    const elementText = (element: Deno.lint.Node): string =>
+      element.type === "TSArrayType" || LOOSE_TYPES.has(element.type)
         ? `(${readonlyArrayText(element)})`
         : context.sourceCode.getText(element);
-      return `readonly ${elementText}[]`;
-    };
 
     const visitors: Deno.lint.LintVisitor = {
       TSTypeAliasDeclaration() {
@@ -194,12 +206,18 @@ export const readonlyData: Deno.lint.Rule = {
         const replacement = MUTABLE_COLLECTIONS[node.typeName.name];
         if (!replacement) return;
         if (inAmbient() || !inData()) return;
+        const element = node.typeArguments?.params[0];
         context.report({
           node: node.typeName,
           message:
             `${node.typeName.name} is mutable; data types use ${replacement}.`,
           hint: `Build a new ${replacement} instead of mutating one in place.`,
-          fix: (fixer) => fixer.replaceText(node.typeName, replacement),
+          fix: node.typeName.name !== "Array"
+            ? (fixer) => fixer.replaceText(node.typeName, replacement)
+            : element
+            ? (fixer) =>
+              fixer.replaceText(node, `readonly ${elementText(element)}[]`)
+            : undefined,
         });
       },
     };

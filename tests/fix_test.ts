@@ -130,9 +130,21 @@ assertFix(
 );
 
 assertFix(
-  "Array becomes ReadonlyArray",
+  "Array becomes a readonly array",
   `type A = { readonly xs: Array<string> };`,
-  `type A = { readonly xs: ReadonlyArray<string> };`,
+  `type A = { readonly xs: readonly string[] };`,
+);
+
+assertFix(
+  "an Array of a union keeps the union in parentheses",
+  `type A = { readonly xs: Array<string | number> };`,
+  `type A = { readonly xs: readonly (string | number)[] };`,
+);
+
+assertFix(
+  "an Array of arrays becomes readonly at both levels",
+  `type A = { readonly xs: Array<string[]> };`,
+  `type A = { readonly xs: readonly (readonly string[])[] };`,
 );
 
 assertFix(
