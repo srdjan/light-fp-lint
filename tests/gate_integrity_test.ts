@@ -100,6 +100,7 @@ Deno.test("gate integrity: an invalid pragma stays strict on an adapter path", (
 Deno.test("gate integrity: layer resolution passes its own relative-path gate", async () => {
   const source = await Deno.readTextFile("src/layer.ts");
   assertEquals(diagnosticIds("src/layer.ts", source), [
+    "light-fp/ambient-names",
     "light-fp/no-ambient-effects",
     "light-fp/no-throw",
   ]);

@@ -29,9 +29,10 @@ const read = async (
 
 // The plugin's own baseline. runPlugin ignores deno-lint-ignore, so a signed
 // suppression still counts here: a suppression is debt, and debt must not pay
-// itself down. src/layer.ts carries two, for the one cwd read the gate cannot
-// avoid, so the honest baseline is that pair rather than zero.
-const SRC_BASELINE: Readonly<Record<string, number>> = { "src/layer.ts": 2 };
+// itself down. src/layer.ts carries three: the one cwd read the gate cannot avoid
+// draws two diagnostics, and the surrounding try draws one. The honest baseline
+// is that triple rather than zero.
+const SRC_BASELINE: Readonly<Record<string, number>> = { "src/layer.ts": 3 };
 
 Deno.test("ratchet: this repository holds at its committed baseline", async () => {
   const current = measure(count, await read("src"));

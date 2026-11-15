@@ -130,7 +130,8 @@ Deno.test("Deno floor: the real CLI loads every rule and honors comments", async
       edgeCases,
       [
         'import type { Missing } from "./infra.ts?worker";',
-        "export const cache = new Map<string, string>();",
+        'import { accept, Box, reject } from "./ports.ts";',
+        "export const cache = new Box<string, string>();",
         "export type Port = { readonly load: (input: { id: string }) => { value: Missing } };",
         "type Ready = boolean;",
         "type Count = number;",

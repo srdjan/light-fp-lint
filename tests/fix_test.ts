@@ -252,7 +252,7 @@ export function bump(): undefined { globalThis.amb.value = "x"; return undefined
       args: [
         "lint",
         "--fix",
-        "--rules-exclude=light-fp/no-ambient-effects",
+        "--rules-exclude=light-fp/no-ambient-effects,light-fp/ambient-names",
         "--config",
         config,
         path,

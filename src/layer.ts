@@ -65,7 +65,7 @@ export function isRelativeSpecifier(specifier: FileName): Answer {
 function currentRoot(): string | undefined {
   // deno-lint-ignore light-fp/no-throw -- Root discovery must tolerate hosts that deny cwd access.
   try {
-    // deno-lint-ignore light-fp/no-ambient-effects -- The workspace root is what anchors an absolute lint path.
+    // deno-lint-ignore light-fp/no-ambient-effects light-fp/ambient-names -- The workspace root is what anchors an absolute lint path.
     return toPosix(Deno.cwd());
   } catch {
     return undefined;

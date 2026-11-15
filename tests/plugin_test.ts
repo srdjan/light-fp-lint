@@ -4,6 +4,7 @@ import plugin from "../src/mod.ts";
 Deno.test("plugin: exposes the documented rule set", () => {
   assertEquals(plugin.name, "light-fp");
   assertEquals(Object.keys(plugin.rules).toSorted(), [
+    "ambient-names",
     "declaration-forms",
     "function-forms",
     "layer-boundary",
@@ -39,6 +40,7 @@ Deno.test("plugin: every rule reports with a hint", () => {
     "operator-forms": `export const a = (x: number): boolean => x == 1;`,
     "type-forms": `export function f(): number { return 1; }`,
     "record-forms": `const v = 1; export const a = { v };`,
+    "ambient-names": `export const a = Symbol;`,
     "pure-module": `let n = 0;`,
     "no-ambient-effects": `export const now = Date.now();`,
     "no-throw": `export const f = () => { throw new Error("x"); };`,

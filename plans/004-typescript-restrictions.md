@@ -202,6 +202,9 @@ different reason. The plan accepts the overlap instead of coupling rules.
   `operator-forms`.
 - `new X()` and a tagged template at module scope: `pure-module` and
   `operator-forms`.
+- `console.log`, `Deno.cwd()`, `globalThis`, `fetch()`, and
+  `crypto.randomUUID()` as unbound names: `no-ambient-effects` and
+  `ambient-names`.
 
 ## Units
 

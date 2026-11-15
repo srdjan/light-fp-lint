@@ -64,3 +64,5 @@ export function operatorProbe(left: ProbeCount, right: ProbeCount): ProbeFlag {
 export function typeProbe(): number {
   return 1;
 }
+
+export const ambientNameProbe = Symbol;

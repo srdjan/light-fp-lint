@@ -8,6 +8,11 @@ export const expectedExampleDiagnostics: Readonly<
   "adapters/persistence.ts": [],
   "adapters/side.ts": [],
   "domain/api_orchestration.bad.ts": [
+    "light-fp/ambient-names",
+    "light-fp/ambient-names",
+    "light-fp/ambient-names",
+    "light-fp/ambient-names",
+    "light-fp/ambient-names",
     "light-fp/function-forms",
     "light-fp/function-forms",
     "light-fp/no-ambient-effects",
@@ -23,6 +28,11 @@ export const expectedExampleDiagnostics: Readonly<
   ],
   "domain/api_orchestration.good.ts": [],
   "domain/auth_flow.bad.ts": [
+    "light-fp/ambient-names",
+    "light-fp/ambient-names",
+    "light-fp/ambient-names",
+    "light-fp/ambient-names",
+    "light-fp/ambient-names",
     "light-fp/layer-boundary",
     "light-fp/no-ambient-effects",
     "light-fp/no-ambient-effects",
@@ -53,6 +63,7 @@ export const expectedExampleDiagnostics: Readonly<
   ],
   "domain/auth_flow.good.ts": [],
   "domain/bad.ts": [
+    "light-fp/ambient-names",
     "light-fp/declaration-forms",
     "light-fp/layer-boundary",
     "light-fp/lexical-forms",
@@ -73,6 +84,7 @@ export const expectedExampleDiagnostics: Readonly<
     "light-fp/type-forms",
   ],
   "domain/effect_composition.bad.ts": [
+    "light-fp/ambient-names",
     "light-fp/function-forms",
     "light-fp/no-ambient-effects",
     "light-fp/no-discarded-values",
@@ -82,6 +94,9 @@ export const expectedExampleDiagnostics: Readonly<
   ],
   "domain/effect_composition.good.ts": [],
   "domain/persistence.bad.ts": [
+    "light-fp/ambient-names",
+    "light-fp/ambient-names",
+    "light-fp/ambient-names",
     "light-fp/layer-boundary",
     "light-fp/no-ambient-effects",
     "light-fp/no-discarded-values",
@@ -98,6 +113,7 @@ export const expectedExampleDiagnostics: Readonly<
   "domain/persistence.good.ts": [],
   "domain/shared/primitives.ts": [],
   "domain/validation_pipeline.bad.ts": [
+    "light-fp/ambient-names",
     "light-fp/no-ambient-effects",
     "light-fp/no-ambient-effects",
     "light-fp/no-ambient-effects",

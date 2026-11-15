@@ -37,8 +37,9 @@ export const isNode = (value: unknown): value is SyntaxNode =>
   typeof value.type === "string";
 
 /**
- * The names a file binds itself: imports, variable declarators, function names,
- * and parameters. A global name that appears here is shadowed, not ambient.
+ * The names a file binds itself: imports, variable declarators, function and
+ * class names, parameters, catch parameters, and enum, namespace, and import
+ * alias names. A global name that appears here is shadowed, not ambient.
  */
 export const localBindings = (ast: Deno.lint.Program): ReadonlySet<string> => {
   const names = new Set<string>();
@@ -90,6 +91,17 @@ export const localBindings = (ast: Deno.lint.Program): ReadonlySet<string> => {
     } else if (value.type === "FunctionDeclaration") {
       if (value.id) names.add(value.id.name);
       for (const parameter of value.params) addPattern(parameter);
+    } else if (
+      value.type === "ClassDeclaration" || value.type === "ClassExpression" ||
+      value.type === "TSEnumDeclaration" ||
+      value.type === "TSDeclareFunction" ||
+      value.type === "TSImportEqualsDeclaration"
+    ) {
+      if (value.id) names.add(value.id.name);
+    } else if (value.type === "TSModuleDeclaration") {
+      if (value.id.type === "Identifier") names.add(value.id.name);
+    } else if (value.type === "CatchClause") {
+      addPattern(value.param);
     } else if (
       value.type === "FunctionExpression" ||
       value.type === "ArrowFunctionExpression"

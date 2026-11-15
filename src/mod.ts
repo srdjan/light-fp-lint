@@ -46,6 +46,7 @@ import { operatorForms } from "./rules/operator_forms.ts";
 import { statementForms } from "./rules/statement_forms.ts";
 import { recordForms } from "./rules/record_forms.ts";
 import { typeForms } from "./rules/type_forms.ts";
+import { ambientNames } from "./rules/ambient_names.ts";
 import { requireIgnoreReason } from "./rules/require_ignore_reason.ts";
 
 /**
@@ -73,6 +74,7 @@ const plugin: Deno.lint.Plugin = {
     "operator-forms": operatorForms,
     "record-forms": recordForms,
     "type-forms": typeForms,
+    "ambient-names": ambientNames,
     // Supporting: house style rather than soundness.
     "prefer-type-for-data": preferTypeForData,
     // Meta: keeps the escape hatches visible.
@@ -83,6 +85,7 @@ const plugin: Deno.lint.Plugin = {
 export default plugin;
 
 export {
+  ambientNames,
   declarationForms,
   functionForms,
   layerBoundary,

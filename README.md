@@ -488,6 +488,28 @@ that a source-less `export { f }` list names. An exported function-valued
 `never`, type references, tuples, object types, type predicates, and `asserts`
 stay allowed. `readonly-data` also reports `Array<T>` in a data position.
 
+### `light-fp/ambient-names`
+
+Domain code reads only a closed set of global names. Every other name that the
+file does not bind is a capability, and the file imports it or receives it from
+a port.
+
+| Refused form                                                                                                         | Write instead                                                 | ZTS code |
+| -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- | -------- |
+| A value name that the file does not bind and the allowlist does not name, such as `console`, `Map`, `Error`, `fetch` | Import the name, or receive it as a parameter from a port     | ZTS629   |
+| `eval`, `Proxy`, `Reflect`, `Function`, `arguments`                                                                  | Reach the capability through a port, not through a global     | ZTS001   |
+| `JSON.parse`, including `JSON["parse"]`                                                                              | Parse in an adapter, and pass a validated value to the domain | spec     |
+
+The allowlist has fourteen names: `Array`, `Boolean`, `Date`, `JSON`, `Math`,
+`Number`, `Object`, `String`, `parseFloat`, `parseInt`, `undefined`, `NaN`,
+`Infinity`, and `Promise`. A name is bound when the file declares it as a
+variable, function, class, enum, namespace, parameter, catch parameter, or
+import. The rule checks value positions only. A member property, an object key,
+a label, an import or export name, `import.meta`, `new.target`, and every name
+inside a type stay allowed. `JSON.stringify` stays allowed. `console.log` and
+`fetch()` also report under `no-ambient-effects`, because each rule gives its
+own reason.
+
 ## Suppressing a rule
 
 ```ts
@@ -751,9 +773,10 @@ Individually:
 The plugin lints its own source. `src/layer.ts` resolves as domain code. The
 real CLI reports it clean because two signed line suppressions cover its one
 `Deno.cwd()` read and the surrounding `try/catch` used when cwd access is
-denied. `runPlugin` ignores those suppressions and records two diagnostics as
-ratchet debt. The rule modules, composition root, and hook CLI carry adapter
-pragmas because they adapt imperative APIs.
+denied. The `Deno.cwd()` suppression names both `no-ambient-effects` and
+`ambient-names`. `runPlugin` ignores those suppressions and records three
+diagnostics as ratchet debt. The rule modules, composition root, and hook CLI
+carry adapter pragmas because they adapt imperative APIs.
 
 The current-Deno suite uses `Deno.lint.runPlugin`. `tests/rules_test.ts` is
 table-driven per rule and asserts exact diagnostic counts, so a rule that fires
