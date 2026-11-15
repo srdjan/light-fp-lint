@@ -44,14 +44,6 @@ for (
         `import { fetch } from "../ports/http.ts";\nexport const load = (url: string) => fetch(url);`,
     },
     {
-      name: "a direct re-export names the source module binding",
-      source: `export { fetch } from "./ports/http.ts";`,
-    },
-    {
-      name: "an aliased re-export names the source module binding",
-      source: `export { fetch as httpFetch } from "./ports/x.ts";`,
-    },
-    {
       name: "a sourceless export of a local fetch binding is not ambient",
       source: `const fetch = (u: string) => u; export { fetch };`,
     },
@@ -66,6 +58,24 @@ for (
     assertClean(testCase.source);
   });
 }
+
+// A re-export is a module-forms violation, so these cases count only the
+// no-ambient-effects diagnostics: the re-exported name is not an ambient read.
+Deno.test("no-ambient-effects: a direct re-export names the source module binding", () => {
+  assertRuleCount(
+    "light-fp/no-ambient-effects",
+    `export { fetch } from "./ports/http.ts";`,
+    0,
+  );
+});
+
+Deno.test("no-ambient-effects: an aliased re-export names the source module binding", () => {
+  assertRuleCount(
+    "light-fp/no-ambient-effects",
+    `export { fetch as httpFetch } from "./ports/x.ts";`,
+    0,
+  );
+});
 
 for (
   const testCase of [

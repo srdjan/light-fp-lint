@@ -31,3 +31,5 @@ export const record = (input: unknown) => {
   Something.send(input); // no-discarded-values
   return input as Foreign; // no-unsafe-cast: Foreign is not declared here
 };
+
+export default make; // module-forms: a default export

@@ -1,6 +1,11 @@
 // @light-fp adapter -- a lint rule adapts Deno's visitor API: it reports through a
 // void callback and is driven by mutation it does not own.
-import { isAdapterPath, layerOf, readPragma } from "../layer.ts";
+import {
+  isAdapterPath,
+  isRelativeSpecifier,
+  layerOf,
+  readPragma,
+} from "../layer.ts";
 
 /**
  * True when a specifier names an adapter. Segment matching, not substring
@@ -10,9 +15,6 @@ import { isAdapterPath, layerOf, readPragma } from "../layer.ts";
 export const namesAdapter = (specifier: string): boolean =>
   !/^(?:data|https?|jsr|node|npm):/.test(specifier) &&
   isAdapterPath(specifier, undefined);
-
-const isRelative = (specifier: string): boolean =>
-  specifier.startsWith(".") || specifier.startsWith("/");
 
 /**
  * `light-fp/layer-boundary`: domain code names no adapter, in any import form -
@@ -58,7 +60,9 @@ export const layerBoundary: Deno.lint.Rule = {
         checkSource(node.source);
         // A side-effect-only import runs the module for what it does, not for
         // what it exports, which is the one import form that is itself an effect.
-        if (node.specifiers.length === 0 && isRelative(node.source.value)) {
+        if (
+          node.specifiers.length === 0 && isRelativeSpecifier(node.source.value)
+        ) {
           context.report({
             node,
             message: "A side-effect import runs code at load time.",

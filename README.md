@@ -17,6 +17,7 @@ and a hexagonal boundary between domain and adapters.
 - [Agent integration](#agent-integration)
 - [Layers](#layers)
 - [Rules](#rules)
+- [Restriction rules](#restriction-rules)
 - [Suppressing a rule](#suppressing-a-rule)
 - [Adopting on an existing codebase](#adopting-on-an-existing-codebase)
 - [Limits](#limits)
@@ -147,11 +148,11 @@ $ grep -rn "@light-fp adapter" src/
 That command does not list test files, path-inferred adapters, or `lint.exclude`
 entries, which need separate review.
 
-| Layer     | Rules applied                              |
-| --------- | ------------------------------------------ |
-| `domain`  | all of them                                |
-| `adapter` | only `require-ignore-reason`               |
-| `prelude` | all except `no-throw` and `no-unsafe-cast` |
+| Layer     | Rules applied                                                      |
+| --------- | ------------------------------------------------------------------ |
+| `domain`  | all of them                                                        |
+| `adapter` | only `require-ignore-reason`                                       |
+| `prelude` | all except `no-throw`, `no-unsafe-cast`, and the restriction rules |
 
 The prelude is intended for the small module defining `Result` and the helpers
 that legitimately need `try/catch` or a brand-creating cast.
@@ -326,6 +327,28 @@ Reports a line suppression naming a `light-fp` rule unless it has a reason of at
 least ten characters. It also reports file-wide suppressions that are bare or
 name a `light-fp` rule when the plugin receives the comment. The real CLI has an
 important exception described below.
+
+## Restriction rules
+
+These rules carry over the restrictions of the zts-model-1 TypeScript profile
+that apply to standard TypeScript. They apply to domain files only. Each table
+row names the ZTS diagnostic code that the restriction comes from.
+
+### `light-fp/module-forms`
+
+Domain code uses TypeScript files, named imports, and exports declared in the
+module that exports them. Relative side-effect imports and dynamic `import()`
+stay with `layer-boundary`.
+
+| Refused form                                                | Write instead                                           | ZTS code |
+| ----------------------------------------------------------- | ------------------------------------------------------- | -------- |
+| A `.js`, `.jsx`, `.mjs`, or `.cjs` file                     | Rename the file to `.ts`, or to `.tsx` for JSX          | ZTS052   |
+| `import x from "./mod.ts"`, `import type X from "./mod.ts"` | `import { name } from "./mod.ts"`                       | ZTS002   |
+| `import * as x from "./mod.ts"`                             | Import each name that the file uses                     | ZTS002   |
+| `import "npm:pkg"` (a side-effect import of a package)      | Import a named value, and move the effect to an adapter | ZTS002   |
+| `export { x } from "./mod.ts"`, `export * from "./mod.ts"`  | Import the name, and export it from its own module      | ZTS002   |
+| `import { x } from "./mod.ts"; export { x };`               | Export the declaration in the module that owns it       | ZTS002   |
+| `export default ...`, `export { x as default }`             | `export function name(...)` or `export const name`      | ZTS056   |
 
 ## Suppressing a rule
 

@@ -46,6 +46,10 @@ const TEST_MARKERS = ["_test", ".test", "_bench", ".bench"];
 export const toPosix = (filename: string): string =>
   filename.replaceAll("\\", "/");
 
+/** True when an import specifier names a file by path, not by package. */
+export const isRelativeSpecifier = (specifier: string): boolean =>
+  specifier.startsWith(".") || specifier.startsWith("/");
+
 // Read per call, not once at module load. The editor's language server outlives
 // any single project, so a root captured at import time goes stale the moment it
 // serves a second workspace, and every file then resolves against the wrong root.

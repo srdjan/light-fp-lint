@@ -24,6 +24,8 @@ export interface DataProbe {
   readonly value: string;
 }
 
+export default "Light FP activation probe";
+
 export const commentLikeProbe = "// deno-lint-ignore light-fp/no-throw";
 
 // deno-lint-ignore light-fp/no-throw
