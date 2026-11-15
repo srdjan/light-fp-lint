@@ -3,6 +3,7 @@
 // - `no-throw` reports exceptions instead of `Result` values.
 // - `no-discarded-values` reports ignored push results.
 // - `no-ambient-effects` reports `Date.now()` and zero-argument `new Date()`.
+// - `statement-forms` reports the `switch`.
 
 interface SignupForm { // prefer-type-for-data
   name?: string; // readonly-data
@@ -37,4 +38,13 @@ export function toPersistenceRecord(form: SignupForm): Record<string, unknown> {
     ? form.birthDate
     : new Date(form.birthDate ?? Date.now()); // no-ambient-effects
   return { ...form, createdAt: Date.now() }; // no-ambient-effects
+}
+
+export function describeRole(role: string): string {
+  switch (role) { // statement-forms
+    case "admin":
+      return "Administrator";
+    default:
+      return "Member";
+  }
 }

@@ -3,6 +3,7 @@ import {
   decideHookAction,
   type GitVersion,
   type HookCommand,
+  type HookDecision,
   type HookState,
   hookState,
   parseGitVersion,
@@ -250,4 +251,25 @@ Deno.test("git hook: status reports installed hooks inactive on old Git", () => 
     ),
     { _tag: "InstalledButInactive", version: version(54) },
   );
+});
+
+Deno.test("git hook: the minimum Git version compares major, then minor, then patch", () => {
+  const install = (
+    major: number,
+    minor: number,
+    patch: number,
+  ): HookDecision["_tag"] =>
+    decideHookAction(command("Install"), {
+      _tag: "GitVersion",
+      major,
+      minor,
+      patch,
+    }, { _tag: "Absent" })._tag;
+
+  assertEquals(install(3, 0, 0), "Write");
+  assertEquals(install(1, 99, 9), "UnsupportedGit");
+  assertEquals(install(2, 55, 0), "Write");
+  assertEquals(install(2, 55, 1), "Write");
+  assertEquals(install(2, 56, 0), "Write");
+  assertEquals(install(2, 54, 9), "UnsupportedGit");
 });

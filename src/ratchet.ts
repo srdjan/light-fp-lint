@@ -86,16 +86,14 @@ function listing(files: readonly FileDelta[]): string {
 
 /** A message suitable for a failing test. */
 export function explain(verdict: Verdict): string {
-  switch (verdict._tag) {
-    case "Unchanged":
-      return "";
-    case "NothingMeasured":
-      return "no files were measured; the ratchet proved nothing";
-    case "Regressed":
-      return `new violations:\n${listing(verdict.files)}`;
-    case "Improved":
-      return `violations went down; tighten the baseline:\n${
-        listing(verdict.files)
-      }`;
+  if (verdict._tag === "Unchanged") return "";
+  if (verdict._tag === "NothingMeasured") {
+    return "no files were measured; the ratchet proved nothing";
   }
+  if (verdict._tag === "Regressed") {
+    return `new violations:\n${listing(verdict.files)}`;
+  }
+  return `violations went down; tighten the baseline:\n${
+    listing(verdict.files)
+  }`;
 }

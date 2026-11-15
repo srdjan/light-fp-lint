@@ -65,20 +65,14 @@ export function parseHookCommand(
   args: readonly string[],
 ): HookCommand | undefined {
   if (args.length !== 1) return undefined;
-  switch (args[0]) {
-    case "install":
-      return { _tag: "Install" };
-    case "status":
-      return { _tag: "Status" };
-    case "uninstall":
-      return { _tag: "Uninstall" };
-    case "help":
-    case "--help":
-    case "-h":
-      return { _tag: "Help" };
-    default:
-      return undefined;
+  const arg = args[0];
+  if (arg === "install") return { _tag: "Install" };
+  if (arg === "status") return { _tag: "Status" };
+  if (arg === "uninstall") return { _tag: "Uninstall" };
+  if (arg === "help" || arg === "--help" || arg === "-h") {
+    return { _tag: "Help" };
   }
+  return undefined;
 }
 
 export function parseGitVersion(output: string): GitVersion {
@@ -143,7 +137,7 @@ function versionAtLeast(
     lightFpHook.minimumGitVersion.minor,
     lightFpHook.minimumGitVersion.patch,
   ];
-  for (let index = 0; index < actual.length; index += 1) {
+  for (const index of actual.keys()) {
     if (actual[index] > minimum[index]) return true;
     if (actual[index] < minimum[index]) return false;
   }
@@ -163,44 +157,35 @@ function conflictDecision(
 }
 
 function installDecision(state: HookState): HookDecision {
-  switch (state._tag) {
-    case "Absent":
-      return { _tag: "Write" };
-    case "Installed":
-      return { _tag: "NoChange", command: "Install", state: "Installed" };
-    case "PartialInstall":
-      return { _tag: "Repair" };
-    case "Conflict":
-      return conflictDecision(state);
+  if (state._tag === "Absent") return { _tag: "Write" };
+  if (state._tag === "Installed") {
+    return { _tag: "NoChange", command: "Install", state: "Installed" };
   }
+  if (state._tag === "PartialInstall") return { _tag: "Repair" };
+  return conflictDecision(state);
 }
 
 function statusDecision(state: HookState): HookDecision {
-  switch (state._tag) {
-    case "Absent":
-      return { _tag: "NoChange", command: "Status", state: "Absent" };
-    case "Installed":
-      return { _tag: "NoChange", command: "Status", state: "Installed" };
-    case "PartialInstall":
-      return { _tag: "IncompleteInstall" };
-    case "Conflict":
-      return conflictDecision(state);
+  if (state._tag === "Absent") {
+    return { _tag: "NoChange", command: "Status", state: "Absent" };
   }
+  if (state._tag === "Installed") {
+    return { _tag: "NoChange", command: "Status", state: "Installed" };
+  }
+  if (state._tag === "PartialInstall") return { _tag: "IncompleteInstall" };
+  return conflictDecision(state);
 }
 
 function uninstallDecision(state: HookState): HookDecision {
-  switch (state._tag) {
-    case "Absent":
-      return { _tag: "NoChange", command: "Uninstall", state: "Absent" };
-    case "Installed":
-      return { _tag: "Remove" };
-    case "PartialInstall":
-      return { _tag: "Remove" };
-    case "Conflict":
-      return state.ownership === "Local"
-        ? { _tag: "Remove" }
-        : conflictDecision(state);
+  if (state._tag === "Absent") {
+    return { _tag: "NoChange", command: "Uninstall", state: "Absent" };
   }
+  if (state._tag === "Installed" || state._tag === "PartialInstall") {
+    return { _tag: "Remove" };
+  }
+  return state.ownership === "Local"
+    ? { _tag: "Remove" }
+    : conflictDecision(state);
 }
 
 export function decideHookAction(
@@ -221,18 +206,12 @@ export function decideHookAction(
     return { _tag: "InstalledButInactive", version };
   }
 
-  switch (command._tag) {
-    case "Install":
-      return installDecision(state);
-    case "Status":
-      return statusDecision(state);
-    case "Uninstall":
-      return uninstallDecision(state);
-    case "Help":
-      return {
-        _tag: "NoChange",
-        command: "Help",
-        state: state._tag === "Installed" ? "Installed" : "Absent",
-      };
-  }
+  if (command._tag === "Install") return installDecision(state);
+  if (command._tag === "Status") return statusDecision(state);
+  if (command._tag === "Uninstall") return uninstallDecision(state);
+  return {
+    _tag: "NoChange",
+    command: "Help",
+    state: state._tag === "Installed" ? "Installed" : "Absent",
+  };
 }

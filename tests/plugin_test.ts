@@ -18,6 +18,7 @@ Deno.test("plugin: exposes the documented rule set", () => {
     "pure-module",
     "readonly-data",
     "require-ignore-reason",
+    "statement-forms",
   ]);
 });
 
@@ -30,6 +31,8 @@ Deno.test("plugin: every rule reports with a hint", () => {
     "lexical-forms": `export const a = "a\\qb";`,
     "declaration-forms": `export const f = () => 1;`,
     "function-forms": `export function f(a = 1): number { return a; }`,
+    "statement-forms":
+      `export function f(x: boolean): void { while (x) { return; } }`,
     "pure-module": `let n = 0;`,
     "no-ambient-effects": `export const now = Date.now();`,
     "no-throw": `export const f = () => { throw new Error("x"); };`,

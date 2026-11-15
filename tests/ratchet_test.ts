@@ -114,3 +114,21 @@ Deno.test("ratchet: measure counts real diagnostics", () => {
   assertEquals(counted["src/domain/b.ts"], 0);
   assertEquals(counted["src/adapters/c.ts"], 0);
 });
+
+Deno.test("ratchet: each verdict explains itself with an exact message", () => {
+  assertEquals(explain({ _tag: "Unchanged" }), "");
+  assertEquals(
+    explain({
+      _tag: "Regressed",
+      files: [{ file: "a.ts", was: 3, now: 4 }],
+    }),
+    "new violations:\n  a.ts: 3 -> 4",
+  );
+  assertEquals(
+    explain({
+      _tag: "Improved",
+      files: [{ file: "a.ts", was: 3, now: 1 }],
+    }),
+    "violations went down; tighten the baseline:\n  a.ts: 3 -> 1",
+  );
+});

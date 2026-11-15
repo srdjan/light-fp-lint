@@ -42,3 +42,9 @@ export const declarationProbe = (): number => 1;
 export function functionProbe(count: number = 1): number {
   return count;
 }
+
+export function statementProbe(flag: boolean): void {
+  while (flag) {
+    return;
+  }
+}

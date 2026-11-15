@@ -99,6 +99,7 @@ export const expectedExampleDiagnostics: Readonly<
     "light-fp/readonly-data",
     "light-fp/readonly-data",
     "light-fp/readonly-data",
+    "light-fp/statement-forms",
   ],
   "domain/validation_pipeline.good.ts": [],
 };
