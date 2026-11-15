@@ -69,26 +69,28 @@ export type AuthPlan = WithCapability<
   Result<AuthError, LoginSuccess>
 >;
 
-const normalizeEmail = (email: string): string => email.trim().toLowerCase();
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
 
 // Each validator is generic in its input so it adds a brand without discarding
 // the ones already there. Written against a bare `Credentials` instead, the
 // second validator in a chain would erase the first one's brand, and the two
 // would have to be applied in one fixed order forever.
 
-const validateEmail = <T extends Credentials>(
+function validateEmail<T extends Credentials>(
   raw: T,
-): Result<AuthError, T & { readonly email: Email }> => {
+): Result<AuthError, T & { readonly email: Email }> {
   const normalized = normalizeEmail(raw.email);
   if (!normalized.includes("@")) {
     return err({ type: "InvalidEmail", reason: "Must contain @" });
   }
   return ok({ ...raw, email: normalized as Email });
-};
+}
 
-const validatePassword = <T extends Credentials>(
+function validatePassword<T extends Credentials>(
   raw: T,
-): Result<AuthError, T & { readonly password: Password }> => {
+): Result<AuthError, T & { readonly password: Password }> {
   if (raw.password.length < 12) {
     return err({
       type: "InvalidPassword",
@@ -96,18 +98,19 @@ const validatePassword = <T extends Credentials>(
     });
   }
   return ok({ ...raw, password: raw.password as Password });
-};
+}
 
-const ensureNotLocked = (record: UserRecord): Result<AuthError, UserRecord> =>
-  record.isLocked
+function ensureNotLocked(record: UserRecord): Result<AuthError, UserRecord> {
+  return record.isLocked
     ? err({ type: "WrongPassword", email: record.email })
     : ok(record);
+}
 
-const planIssue = (
+function planIssue(
   ports: LoginPorts,
   input: Credentials & { readonly email: Email; readonly password: Password },
-): AuthPlan =>
-  brandWithCapability("AuthIO", ports, async (cap) => {
+): AuthPlan {
+  return brandWithCapability("AuthIO", ports, async (cap) => {
     const record = await cap.lookupUser(input.email);
     if (!record) return err({ type: "UnknownUser", email: input.email });
     const verifiedRecord = ensureNotLocked(record);
@@ -138,12 +141,13 @@ const planIssue = (
       roles: verifiedRecord.value.roles,
     });
   });
+}
 
-export const planLogin = (
+export function planLogin(
   ports: LoginPorts,
   input: Credentials,
-): Result<AuthError, AuthPlan> =>
-  chain(
+): Result<AuthError, AuthPlan> {
+  return chain(
     validateEmail(input),
     (emailReady) =>
       chain(
@@ -151,6 +155,7 @@ export const planLogin = (
         (ready) => ok(planIssue(ports, ready)),
       ),
   );
+}
 
 // Callers can supply fake ports when they execute the returned AuthIO effect.
 // This module imports no adapter implementation.

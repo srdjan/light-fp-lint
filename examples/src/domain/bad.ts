@@ -27,7 +27,7 @@ export function make(): number {
   throw new Error("nope"); // no-throw
 }
 
-export const record = (input: unknown) => {
+export const record = (input: unknown) => { // declaration-forms: an exported function is a const binding
   Something.send(input); // no-discarded-values
   return input as Foreign; // no-unsafe-cast: Foreign is not declared here
 };

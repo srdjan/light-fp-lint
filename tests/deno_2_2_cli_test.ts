@@ -132,12 +132,12 @@ Deno.test("Deno floor: the real CLI loads every rule and honors comments", async
         'import type { Missing } from "./infra.ts?worker";',
         "export const cache = new Map<string, string>();",
         "export type Port = { readonly load: (input: { id: string }) => { value: Missing } };",
-        "export const discard = (ready: boolean): number => {",
+        "export function discard(ready: boolean): number {",
         "  ready && accept();",
         "  ready ? accept() : reject();",
         "  new Box();",
         "  return 1;",
-        "};",
+        "}",
       ].join("\n"),
     );
     const edgeOutput = await runLint(directory, edgeCases);

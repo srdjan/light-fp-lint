@@ -38,6 +38,7 @@ import { readonlyData } from "./rules/readonly_data.ts";
 import { noOo } from "./rules/no_oo.ts";
 import { noUnsafeCast } from "./rules/no_unsafe_cast.ts";
 import { preferTypeForData } from "./rules/prefer_type_for_data.ts";
+import { declarationForms } from "./rules/declaration_forms.ts";
 import { lexicalForms } from "./rules/lexical_forms.ts";
 import { moduleForms } from "./rules/module_forms.ts";
 import { requireIgnoreReason } from "./rules/require_ignore_reason.ts";
@@ -61,6 +62,7 @@ const plugin: Deno.lint.Plugin = {
     // Restrictions: zts-model-1 forms that apply to standard TypeScript.
     "module-forms": moduleForms,
     "lexical-forms": lexicalForms,
+    "declaration-forms": declarationForms,
     // Supporting: house style rather than soundness.
     "prefer-type-for-data": preferTypeForData,
     // Meta: keeps the escape hatches visible.
@@ -71,6 +73,7 @@ const plugin: Deno.lint.Plugin = {
 export default plugin;
 
 export {
+  declarationForms,
   layerBoundary,
   lexicalForms,
   moduleForms,

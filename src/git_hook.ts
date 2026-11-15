@@ -61,9 +61,9 @@ export type HookDecision =
     readonly otherEntries: number;
   };
 
-export const parseHookCommand = (
+export function parseHookCommand(
   args: readonly string[],
-): HookCommand | undefined => {
+): HookCommand | undefined {
   if (args.length !== 1) return undefined;
   switch (args[0]) {
     case "install":
@@ -79,22 +79,25 @@ export const parseHookCommand = (
     default:
       return undefined;
   }
-};
+}
 
-export const parseGitVersion = (output: string): GitVersion => {
+export function parseGitVersion(output: string): GitVersion {
   const match =
     /^git version (\d+)\.(\d+)\.(\d+)(?:\.[A-Za-z0-9][A-Za-z0-9.-]*)?(?: \([^\r\n()]+\))?$/
       .exec(output);
   if (match === null) return { _tag: "InvalidGitVersion", observed: output };
 
-  const [major, minor, patch] = match.slice(1).map(Number);
+  const parts = match.slice(1).map(Number);
+  const major = parts[0];
+  const minor = parts[1];
+  const patch = parts[2];
   if (![major, minor, patch].every(Number.isSafeInteger)) {
     return { _tag: "InvalidGitVersion", observed: output };
   }
   return { _tag: "GitVersion", major, minor, patch };
-};
+}
 
-export const hookState = (entries: readonly HookConfigEntry[]): HookState => {
+export function hookState(entries: readonly HookConfigEntry[]): HookState {
   if (entries.length === 0) {
     return { _tag: "Absent" };
   }
@@ -129,11 +132,11 @@ export const hookState = (entries: readonly HookConfigEntry[]): HookState => {
     eventEntries: events.length,
     otherEntries: entries.length - commands.length - events.length,
   };
-};
+}
 
-const versionAtLeast = (
+function versionAtLeast(
   version: Extract<GitVersion, { readonly _tag: "GitVersion" }>,
-): boolean => {
+): boolean {
   const actual = [version.major, version.minor, version.patch];
   const minimum = [
     lightFpHook.minimumGitVersion.major,
@@ -145,19 +148,21 @@ const versionAtLeast = (
     if (actual[index] < minimum[index]) return false;
   }
   return true;
-};
+}
 
-const conflictDecision = (
+function conflictDecision(
   state: Extract<HookState, { readonly _tag: "Conflict" }>,
-): HookDecision => ({
-  _tag: "RefuseConflict",
-  ownership: state.ownership,
-  commandEntries: state.commandEntries,
-  eventEntries: state.eventEntries,
-  otherEntries: state.otherEntries,
-});
+): HookDecision {
+  return {
+    _tag: "RefuseConflict",
+    ownership: state.ownership,
+    commandEntries: state.commandEntries,
+    eventEntries: state.eventEntries,
+    otherEntries: state.otherEntries,
+  };
+}
 
-const installDecision = (state: HookState): HookDecision => {
+function installDecision(state: HookState): HookDecision {
   switch (state._tag) {
     case "Absent":
       return { _tag: "Write" };
@@ -168,9 +173,9 @@ const installDecision = (state: HookState): HookDecision => {
     case "Conflict":
       return conflictDecision(state);
   }
-};
+}
 
-const statusDecision = (state: HookState): HookDecision => {
+function statusDecision(state: HookState): HookDecision {
   switch (state._tag) {
     case "Absent":
       return { _tag: "NoChange", command: "Status", state: "Absent" };
@@ -181,9 +186,9 @@ const statusDecision = (state: HookState): HookDecision => {
     case "Conflict":
       return conflictDecision(state);
   }
-};
+}
 
-const uninstallDecision = (state: HookState): HookDecision => {
+function uninstallDecision(state: HookState): HookDecision {
   switch (state._tag) {
     case "Absent":
       return { _tag: "NoChange", command: "Uninstall", state: "Absent" };
@@ -196,13 +201,13 @@ const uninstallDecision = (state: HookState): HookDecision => {
         ? { _tag: "Remove" }
         : conflictDecision(state);
   }
-};
+}
 
-export const decideHookAction = (
+export function decideHookAction(
   command: HookCommand,
   version: GitVersion,
   state: HookState,
-): HookDecision => {
+): HookDecision {
   if (
     (command._tag === "Install" || command._tag === "Uninstall") &&
     (version._tag === "InvalidGitVersion" || !versionAtLeast(version))
@@ -230,4 +235,4 @@ export const decideHookAction = (
         state: state._tag === "Installed" ? "Installed" : "Absent",
       };
   }
-};
+}

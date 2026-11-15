@@ -340,15 +340,15 @@ Domain code uses TypeScript files, named imports, and exports declared in the
 module that exports them. Relative side-effect imports and dynamic `import()`
 stay with `layer-boundary`.
 
-| Refused form                                                | Write instead                                           | ZTS code |
-| ----------------------------------------------------------- | ------------------------------------------------------- | -------- |
-| A `.js`, `.jsx`, `.mjs`, or `.cjs` file                     | Rename the file to `.ts`, or to `.tsx` for JSX          | ZTS052   |
-| `import x from "./mod.ts"`, `import type X from "./mod.ts"` | `import { name } from "./mod.ts"`                       | ZTS002   |
-| `import * as x from "./mod.ts"`                             | Import each name that the file uses                     | ZTS002   |
-| `import "npm:pkg"` (a side-effect import of a package)      | Import a named value, and move the effect to an adapter | ZTS002   |
-| `export { x } from "./mod.ts"`, `export * from "./mod.ts"`  | Import the name, and export it from its own module      | ZTS002   |
-| `import { x } from "./mod.ts"; export { x };`               | Export the declaration in the module that owns it       | ZTS002   |
-| `export default ...`, `export { x as default }`             | `export function name(...)` or `export const name`      | ZTS056   |
+| Refused form                                                | Write instead                                                   | ZTS code |
+| ----------------------------------------------------------- | --------------------------------------------------------------- | -------- |
+| A `.js`, `.jsx`, `.mjs`, or `.cjs` file                     | Rename the file to `.ts`, or to `.tsx` for JSX                  | ZTS052   |
+| `import x from "./mod.ts"`, `import type X from "./mod.ts"` | `import { name } from "./mod.ts"`                               | ZTS002   |
+| `import * as x from "./mod.ts"`                             | Import each name that the file uses                             | ZTS002   |
+| `import "npm:pkg"` (a side-effect import of a package)      | Import a named value, and move the effect to an adapter         | ZTS002   |
+| `export { x } from "./mod.ts"`, `export * from "./mod.ts"`  | Import the name, and export it from its own module              | ZTS002   |
+| `import { x } from "./mod.ts"; export { x };`               | Export the declaration in the module that owns it               | ZTS002   |
+| `export default ...`, `export { x as default }`             | `export function name(...)`, or `export const name` for a value | ZTS056   |
 
 ### `light-fp/lexical-forms`
 
@@ -360,6 +360,18 @@ with ASCII characters. Legacy octal literals stay with Deno's `no-octal` rule.
 | An escape outside the closed set, such as `"a\qb"`          | Remove the backslash, or write an allowed escape: ``\n \r \t \b \f \v \0 \\ \' \" \` \$ \xHH \uHHHH \u{H...}`` | ZTS013   |
 | A backslash before a line break inside a string or template | Join the lines, or write `\n`                                                                                  | ZTS045   |
 | An identifier with a character above U+007F, such as `café` | Rename it with ASCII letters, digits, `_`, or `$`                                                              | ZTS046   |
+
+### `light-fp/declaration-forms`
+
+Domain code binds each name on its own and declares each function with a
+`function` declaration.
+
+| Refused form                                                            | Write instead                                     | ZTS code |
+| ----------------------------------------------------------------------- | ------------------------------------------------- | -------- |
+| `const { a } = x`, `const [a] = x`, including `for...of` and `for...in` | Bind the value to one name, then read each member | ZTS001   |
+| A destructuring parameter, such as `function f({ a }: T)`               | Accept one named parameter, then read each member | ZTS001   |
+| `const f = () => ...`, `const f = function ...`, `let f = () => ...`    | `function f(...): T { ... }`                      | ZTS608   |
+| `export const f = () => ...`                                            | `export function f(...): T { ... }`               | ZTS609   |
 
 ## Suppressing a rule
 

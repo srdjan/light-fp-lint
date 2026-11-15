@@ -43,16 +43,17 @@ export type Verdict =
  * const baseline = measure(() => 0, [["src/cart.ts", "export const a = 1;"]]);
  * ```
  */
-export const measure = (
+export function measure(
   count: CountDiagnostics,
   files: readonly (readonly [path: string, source: string])[],
-): Baseline =>
-  Object.fromEntries(
-    files.map(([path, source]) => [path, count(path, source)]),
+): Baseline {
+  return Object.fromEntries(
+    files.map((entry) => [entry[0], count(entry[0], entry[1])]),
   );
+}
 
-const deltas = (baseline: Baseline, current: Baseline): readonly FileDelta[] =>
-  [...new Set([...Object.keys(baseline), ...Object.keys(current)])]
+function deltas(baseline: Baseline, current: Baseline): readonly FileDelta[] {
+  return [...new Set([...Object.keys(baseline), ...Object.keys(current)])]
     .toSorted()
     .map((file) => ({
       file,
@@ -60,6 +61,7 @@ const deltas = (baseline: Baseline, current: Baseline): readonly FileDelta[] =>
       now: current[file] ?? 0,
     }))
     .filter((d) => d.was !== d.now);
+}
 
 /**
  * Compare a measurement against the committed baseline.
@@ -68,7 +70,7 @@ const deltas = (baseline: Baseline, current: Baseline): readonly FileDelta[] =>
  * the baseline gets tightened and the ground that was won cannot be lost again
  * without anyone noticing.
  */
-export const compare = (baseline: Baseline, current: Baseline): Verdict => {
+export function compare(baseline: Baseline, current: Baseline): Verdict {
   if (Object.keys(current).length === 0) return { _tag: "NothingMeasured" };
   const changed = deltas(baseline, current);
   if (changed.length === 0) return { _tag: "Unchanged" };
@@ -76,13 +78,14 @@ export const compare = (baseline: Baseline, current: Baseline): Verdict => {
   return worse.length > 0
     ? { _tag: "Regressed", files: worse }
     : { _tag: "Improved", files: changed };
-};
+}
 
-const listing = (files: readonly FileDelta[]): string =>
-  files.map((d) => `  ${d.file}: ${d.was} -> ${d.now}`).join("\n");
+function listing(files: readonly FileDelta[]): string {
+  return files.map((d) => `  ${d.file}: ${d.was} -> ${d.now}`).join("\n");
+}
 
 /** A message suitable for a failing test. */
-export const explain = (verdict: Verdict): string => {
+export function explain(verdict: Verdict): string {
   switch (verdict._tag) {
     case "Unchanged":
       return "";
@@ -95,4 +98,4 @@ export const explain = (verdict: Verdict): string => {
         listing(verdict.files)
       }`;
   }
-};
+}

@@ -46,18 +46,19 @@ export type ListEffect = WithCapability<
   Result<PersistenceError, readonly UserRow[]>
 >;
 
-const ensureEmail = (
+function ensureEmail(
   record: UserRecord,
-): Result<PersistenceError, UserRecord> =>
-  record.email.includes("@")
+): Result<PersistenceError, UserRecord> {
+  return record.email.includes("@")
     ? ok(record)
     : err({ type: "Validation", field: "email", message: "Must contain @" });
+}
 
-export const planInsertUser = (
+export function planInsertUser(
   repo: UserRepositoryPort,
   record: UserRecord,
-): Result<PersistenceError, InsertEffect> =>
-  map(
+): Result<PersistenceError, InsertEffect> {
+  return map(
     ensureEmail(record),
     (validRecord) =>
       brandWithCapability("Persistence", repo, (cap) =>
@@ -69,11 +70,12 @@ export const planInsertUser = (
           }),
         )),
   );
+}
 
-export const planListAdmins = (
+export function planListAdmins(
   repo: UserRepositoryPort,
-): Result<PersistenceError, ListEffect> =>
-  ok(
+): Result<PersistenceError, ListEffect> {
+  return ok(
     brandWithCapability("Persistence", repo, (cap) =>
       handleThrow(
         () => cap.findByRole("admin"),
@@ -83,3 +85,4 @@ export const planListAdmins = (
         }),
       )),
   );
+}

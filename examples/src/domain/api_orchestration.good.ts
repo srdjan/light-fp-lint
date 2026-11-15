@@ -45,28 +45,33 @@ export type HttpEffect = WithCapability<
   Result<ApiError, HttpResponse>
 >;
 
-const bearer = (token: string): string => `Bearer ${token}`;
+function bearer(token: string): string {
+  return `Bearer ${token}`;
+}
 
-const networkError = (cause: unknown): ApiError => ({
-  type: "Network",
-  message: causeMessage(cause, "Network request failed"),
-});
+function networkError(cause: unknown): ApiError {
+  return {
+    type: "Network",
+    message: causeMessage(cause, "Network request failed"),
+  };
+}
 
-const buildProfileRequest = (token: string): Result<ApiError, HttpRequest> =>
-  token.trim().length === 0
+function buildProfileRequest(token: string): Result<ApiError, HttpRequest> {
+  return token.trim().length === 0
     ? err({ type: "Unauthorized", message: "Missing token" })
     : ok({
       method: "GET",
       path: "/me",
       headers: { authorization: bearer(token) },
     });
+}
 
-const buildAuditRequest = (
+function buildAuditRequest(
   token: string,
   event: Readonly<Record<string, unknown>>,
   issuedAt: number,
-): Result<ApiError, HttpRequest> =>
-  token.trim().length === 0
+): Result<ApiError, HttpRequest> {
+  return token.trim().length === 0
     ? err({ type: "Unauthorized", message: "Missing token" })
     : ok({
       method: "POST",
@@ -77,12 +82,13 @@ const buildAuditRequest = (
       },
       body: { ...event, issuedAt },
     });
+}
 
-export const planProfileFetch = (
+export function planProfileFetch(
   cap: HttpCapability,
   token: string,
-): Result<ApiError, HttpEffect> =>
-  map(
+): Result<ApiError, HttpEffect> {
+  return map(
     buildProfileRequest(token),
     (request) =>
       brandWithCapability("Http", cap, async (http) => {
@@ -98,14 +104,15 @@ export const planProfileFetch = (
         return ok(response);
       }),
   );
+}
 
-export const planAuditPost = (
+export function planAuditPost(
   cap: HttpCapability,
   token: string,
   event: Readonly<Record<string, unknown>>,
   issuedAt: number,
-): Result<ApiError, HttpEffect> =>
-  map(
+): Result<ApiError, HttpEffect> {
+  return map(
     buildAuditRequest(token, event, issuedAt),
     (request) =>
       brandWithCapability("Http", cap, async (http) => {
@@ -125,3 +132,4 @@ export const planAuditPost = (
         return ok(sent.value);
       }),
   );
+}

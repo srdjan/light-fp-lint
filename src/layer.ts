@@ -43,18 +43,20 @@ const LINTABLE_EXTENSIONS = [
 
 const TEST_MARKERS = ["_test", ".test", "_bench", ".bench"];
 
-export const toPosix = (filename: string): string =>
-  filename.replaceAll("\\", "/");
+export function toPosix(filename: string): string {
+  return filename.replaceAll("\\", "/");
+}
 
 /** True when an import specifier names a file by path, not by package. */
-export const isRelativeSpecifier = (specifier: string): boolean =>
-  specifier.startsWith(".") || specifier.startsWith("/");
+export function isRelativeSpecifier(specifier: string): boolean {
+  return specifier.startsWith(".") || specifier.startsWith("/");
+}
 
 // Read per call, not once at module load. The editor's language server outlives
 // any single project, so a root captured at import time goes stale the moment it
 // serves a second workspace, and every file then resolves against the wrong root.
 // This is the same staleness that rules out reading configuration from disk.
-const currentRoot = (): string | undefined => {
+function currentRoot(): string | undefined {
   // deno-lint-ignore light-fp/no-throw -- Root discovery must tolerate hosts that deny cwd access.
   try {
     // deno-lint-ignore light-fp/no-ambient-effects -- The workspace root is what anchors an absolute lint path.
@@ -62,39 +64,40 @@ const currentRoot = (): string | undefined => {
   } catch {
     return undefined;
   }
-};
+}
 
-export const pathWithinRoot = (
+export function pathWithinRoot(
   filename: string,
   root: string | undefined,
-): string => {
+): string {
   const posix = toPosix(filename);
   if (!root) return posix;
 
   const posixRoot = toPosix(root);
   const prefix = posixRoot.endsWith("/") ? posixRoot : `${posixRoot}/`;
   return posix.startsWith(prefix) ? posix.slice(prefix.length) : posix;
-};
+}
 
-const pathWithoutDecoration = (filename: string): string =>
-  toPosix(filename).split(/[?#]/, 1)[0];
+function pathWithoutDecoration(filename: string): string {
+  return toPosix(filename).split(/[?#]/, 1)[0];
+}
 
-const lintableStem = (filename: string): string | undefined => {
+function lintableStem(filename: string): string | undefined {
   const dot = filename.lastIndexOf(".");
   if (dot === -1) return undefined;
   return LINTABLE_EXTENSIONS.includes(filename.slice(dot + 1))
     ? filename.slice(0, dot)
     : undefined;
-};
+}
 
 /**
  * True when a path names adapter-owned code. This is the single authority used
  * both to classify files and to enforce imports into adapter paths.
  */
-export const isAdapterPath = (
+export function isAdapterPath(
   filename: string,
   root: string | undefined,
-): boolean => {
+): boolean {
   const segments = pathWithinRoot(pathWithoutDecoration(filename), root)
     .split("/")
     .filter(Boolean);
@@ -103,16 +106,16 @@ export const isAdapterPath = (
     (basename.includes(".") ? "" : basename);
   return stem === "main" || ADAPTER_SEGMENTS.includes(stem) ||
     segments.slice(0, -1).some((segment) => ADAPTER_SEGMENTS.includes(segment));
-};
+}
 
 // Split the name at its extension rather than precomputing every marker and
 // extension pair. Two literal arrays and no work at import time.
-export const isTestFile = (filename: string): boolean => {
+export function isTestFile(filename: string): boolean {
   const posix = toPosix(filename);
   const stem = lintableStem(posix);
   if (!stem) return false;
   return TEST_MARKERS.some((marker) => stem.endsWith(marker));
-};
+}
 
 /** The pragma token found before the first statement, valid or not. */
 export type PragmaLookup =
@@ -128,10 +131,11 @@ export type PragmaLookup =
     readonly range: Deno.lint.Range;
   };
 
-const isLayer = (token: string): token is Layer =>
-  LAYERS.some((layer) => layer === token);
+function isLayer(token: string): token is Layer {
+  return LAYERS.some((layer) => layer === token);
+}
 
-export const readPragma = (sourceCode: Deno.lint.SourceCode): PragmaLookup => {
+export function readPragma(sourceCode: Deno.lint.SourceCode): PragmaLookup {
   // A pragma only counts as a file header, so it has to precede any statement.
   const firstStatement = sourceCode.ast.body[0];
   const limit = firstStatement
@@ -148,17 +152,17 @@ export const readPragma = (sourceCode: Deno.lint.SourceCode): PragmaLookup => {
       : { kind: "invalid", token, range: comment.range };
   }
   return { kind: "none" };
-};
+}
 
 /**
  * Resolve a file's layer. The default is `domain`, which is the strict layer, so
  * a file the conventions do not recognise fails closed. A gate that failed open
  * would disappear the moment someone renamed a directory, with no diagnostic.
  */
-export const layerOf = (
+export function layerOf(
   filename: string,
   sourceCode: Deno.lint.SourceCode,
-): Layer => {
+): Layer {
   const pragma = readPragma(sourceCode);
   if (pragma.kind === "valid") return pragma.layer;
   if (pragma.kind === "invalid") return "domain";
@@ -168,16 +172,20 @@ export const layerOf = (
   if (isAdapterPath(filename, currentRoot())) return "adapter";
 
   return "domain";
-};
+}
 
 /** True for files the strict domain rules apply to. */
-export const isDomain = (
+export function isDomain(
   filename: string,
   sourceCode: Deno.lint.SourceCode,
-): boolean => layerOf(filename, sourceCode) === "domain";
+): boolean {
+  return layerOf(filename, sourceCode) === "domain";
+}
 
 /** The prelude defines Result and the effect brands, so it may throw and cast. */
-export const isPrelude = (
+export function isPrelude(
   filename: string,
   sourceCode: Deno.lint.SourceCode,
-): boolean => layerOf(filename, sourceCode) === "prelude";
+): boolean {
+  return layerOf(filename, sourceCode) === "prelude";
+}

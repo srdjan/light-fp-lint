@@ -219,7 +219,7 @@ namedHookTest(
 
       await Deno.writeTextFile(
         join(directory, "domain.ts"),
-        "export const observed = (now: number): number => now;\n",
+        "export function observed(now: number): number { return now; }\n",
       );
       const accepted = await runGit(directory, ["hook", "run", "pre-commit"]);
       assertEquals(accepted.code, 0, accepted.stdout + accepted.stderr);

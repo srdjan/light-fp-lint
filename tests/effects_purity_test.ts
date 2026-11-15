@@ -29,28 +29,19 @@ const assertClean = (source: string): void => {
 for (
   const testCase of [
     {
-      name: "a destructured parameter is an injected fetch capability",
-      source:
-        `type Http = { readonly fetch: (u: string) => Promise<string> };\nexport const load = ({ fetch }: Http, u: string) => fetch(u);`,
-    },
-    {
       name: "a local timer binding is not the ambient timer",
       source:
-        `const setTimeout = (run: () => void): void => run();\nexport const schedule = (run: () => void) => setTimeout(run);`,
+        `function setTimeout(run: () => void): void { return run(); }\nexport function schedule(run: () => void): void { return setTimeout(run); }`,
     },
     {
       name: "an imported fetch binding is not ambient",
       source:
-        `import { fetch } from "../ports/http.ts";\nexport const load = (url: string) => fetch(url);`,
+        `import { fetch } from "../ports/http.ts";\nexport function load(url: string): string { return fetch(url); }`,
     },
     {
       name: "a sourceless export of a local fetch binding is not ambient",
-      source: `const fetch = (u: string) => u; export { fetch };`,
-    },
-    {
-      name: "a named function expression binds its name inside its body",
       source:
-        `export const wrap = function fetch(value: string) { return fetch(value); };`,
+        `function fetch(u: string): string { return u; }\nexport { fetch };`,
     },
   ] as const
 ) {
@@ -58,6 +49,25 @@ for (
     assertClean(testCase.source);
   });
 }
+
+// The refused form is the point of these two cases, so they count only the
+// no-ambient-effects diagnostics: declaration-forms and function-forms refuse a
+// destructured parameter and a function expression.
+Deno.test("no-ambient-effects: a destructured parameter is an injected fetch capability", () => {
+  assertRuleCount(
+    "light-fp/no-ambient-effects",
+    `type Http = { readonly fetch: (u: string) => Promise<string> };\nexport function load({ fetch }: Http, u: string): Promise<string> { return fetch(u); }`,
+    0,
+  );
+});
+
+Deno.test("no-ambient-effects: a named function expression binds its name inside its body", () => {
+  assertRuleCount(
+    "light-fp/no-ambient-effects",
+    `export const wrap = function fetch(value: string) { return fetch(value); };`,
+    0,
+  );
+});
 
 // A re-export is a module-forms violation, so these cases count only the
 // no-ambient-effects diagnostics: the re-exported name is not an ambient read.

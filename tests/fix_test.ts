@@ -244,7 +244,7 @@ Deno.test("fix: real CLI preserves an assignable ambient interface", async () =>
   interface Amb { value: string }
   var amb: Amb;
 }
-export const bump = (): void => { globalThis.amb.value = "x"; };
+export function bump(): void { globalThis.amb.value = "x"; }
 `;
   try {
     await Deno.writeTextFile(path, source);

@@ -36,10 +36,11 @@ type Profile = { readonly email: string; readonly roles: readonly string[] };
 
 // A type guard narrows once, in one place, and gives the rest of the function a
 // real type. A cast would assert the same thing without checking it.
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
 
-const decodeProfile = (payload: unknown): Result<ApiError, Profile> => {
+function decodeProfile(payload: unknown): Result<ApiError, Profile> {
   if (!isRecord(payload)) {
     return err({
       type: "UnexpectedResponse",
@@ -64,7 +65,7 @@ const decodeProfile = (payload: unknown): Result<ApiError, Profile> => {
     email,
     roles: roles.filter((role): role is string => typeof role === "string"),
   });
-};
+}
 
 export type CompositeError = AuthError | ApiError | PersistenceError;
 
@@ -85,10 +86,10 @@ export type OnboardingEffect = WithCapability<
   Result<CompositeError, OnboardingSuccess>
 >;
 
-export const planOnboarding = (
+export function planOnboarding(
   ports: OnboardingPorts,
   credentials: Credentials,
-): Result<CompositeError, OnboardingEffect> => {
+): Result<CompositeError, OnboardingEffect> {
   const loginPlanResult = planLogin(ports.auth, credentials);
   if (loginPlanResult._tag === "Err") return loginPlanResult;
   const loginPlan: AuthPlan = loginPlanResult.value;
@@ -127,4 +128,4 @@ export const planOnboarding = (
       });
     }),
   );
-};
+}

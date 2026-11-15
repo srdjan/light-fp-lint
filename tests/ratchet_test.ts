@@ -105,7 +105,7 @@ Deno.test("ratchet: a rise anywhere outweighs a fall elsewhere", () => {
 Deno.test("ratchet: measure counts real diagnostics", () => {
   const counted = measure(count, [
     ["src/domain/a.ts", `export const now = Date.now();`],
-    ["src/domain/b.ts", `export const f = () => 1;`],
+    ["src/domain/b.ts", `export function f(): number { return 1; }`],
     ["src/adapters/c.ts", `export const now = Date.now();`],
   ]);
   // Two: pure-module for the call in a module-scope initializer, and

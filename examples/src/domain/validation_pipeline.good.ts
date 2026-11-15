@@ -42,49 +42,49 @@ export type PersistenceDraft = {
 
 type ClockCapability = { readonly clock: () => number };
 
-const ensureEmail = (
+function ensureEmail(
   value?: string,
-): Result<readonly ValidationError[], string> => {
+): Result<readonly ValidationError[], string> {
   if (!value) return err([{ field: "email", message: "Required" }]);
   const trimmed = value.trim().toLowerCase();
   if (!trimmed.includes("@")) {
     return err([{ field: "email", message: "Must contain @" }]);
   }
   return ok(trimmed);
-};
+}
 
-const ensureName = (
+function ensureName(
   value?: string,
-): Result<readonly ValidationError[], string> => {
+): Result<readonly ValidationError[], string> {
   if (!value) return err([{ field: "name", message: "Required" }]);
   if (value.length > 80) return err([{ field: "name", message: "Too long" }]);
   return ok(value.trim());
-};
+}
 
-const ensureBirthDate = (
+function ensureBirthDate(
   value?: string,
-): Result<readonly ValidationError[], string> => {
+): Result<readonly ValidationError[], string> {
   if (!value) {
     return err([{ field: "birthDate", message: "Required ISO string" }]);
   }
   return /\d{4}-\d{2}-\d{2}/.test(value)
     ? ok(value)
     : err([{ field: "birthDate", message: "Use YYYY-MM-DD" }]);
-};
+}
 
-const ensureRoles = (
+function ensureRoles(
   value?: readonly string[],
-): Result<readonly ValidationError[], readonly string[]> => {
+): Result<readonly ValidationError[], readonly string[]> {
   if (!value || value.length === 0) return ok(["user"]);
   const normalized = Array.from(
     new Set(value.map((role) => role.trim()).filter(Boolean)),
   );
   return ok(normalized);
-};
+}
 
-export const normalizeSignup = (
+export function normalizeSignup(
   input: RawSignup,
-): Result<readonly ValidationError[], NormalizedSignup> => {
+): Result<readonly ValidationError[], NormalizedSignup> {
   const emailResult = ensureEmail(input.email);
   const nameResult = ensureName(input.name);
   const birthDateResult = ensureBirthDate(input.birthDateISO);
@@ -109,7 +109,7 @@ export const normalizeSignup = (
     roles: rolesResult.value,
     birthDateISO: birthDateResult.value,
   });
-};
+}
 
 export type PersistenceEffect = WithCapability<
   "IO",
@@ -117,15 +117,16 @@ export type PersistenceEffect = WithCapability<
   PersistenceDraft
 >;
 
-export const toPersistenceDraft = (
+export function toPersistenceDraft(
   cap: ClockCapability,
   normalized: NormalizedSignup,
-): PersistenceEffect =>
+): PersistenceEffect {
   // The plan reads the clock and nothing else, so there is nothing to await.
   // `brandWithCapability` still wants a promise, so say so directly rather than
   // marking the function `async` and leaving a bare `async` with no `await`.
-  brandWithCapability("IO", cap, (clockCap) =>
+  return brandWithCapability("IO", cap, (clockCap) =>
     Promise.resolve({
       ...normalized,
       createdAt: clockCap.clock(),
     }));
+}
