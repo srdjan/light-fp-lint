@@ -75,13 +75,52 @@ export function parseHookCommand(
   return undefined;
 }
 
-export function parseGitVersion(output: string): GitVersion {
-  const match =
-    /^git version (\d+)\.(\d+)\.(\d+)(?:\.[A-Za-z0-9][A-Za-z0-9.-]*)?(?: \([^\r\n()]+\))?$/
-      .exec(output);
-  if (match === null) return { _tag: "InvalidGitVersion", observed: output };
+const DIGITS = "0123456789";
+const ALPHANUMERIC =
+  `${DIGITS}abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ`;
+const GIT_VERSION_PREFIX = "git version ";
 
-  const parts = match.slice(1).map(Number);
+function isMadeOf(text: string, allowed: string): boolean {
+  return [...text].every((character) => allowed.includes(character));
+}
+
+// `1.2.3`, then optionally `.build.tag` where the build part starts with a
+// letter or digit, then optionally ` (vendor text)` with no CR, LF, or parenthesis.
+function versionDigits(output: string): readonly string[] | undefined {
+  if (!output.startsWith(GIT_VERSION_PREFIX)) return undefined;
+  const text = output.slice(GIT_VERSION_PREFIX.length);
+  const vendorAt = text.indexOf(" (");
+  const head = vendorAt === -1 ? text : text.slice(0, vendorAt);
+  if (vendorAt !== -1) {
+    const vendor = text.slice(vendorAt + 2);
+    const inner = vendor.slice(0, -1);
+    if (!vendor.endsWith(")") || inner === "") return undefined;
+    if ([..."\r\n()"].some((character) => inner.includes(character))) {
+      return undefined;
+    }
+  }
+  const segments = head.split(".");
+  const numbers = segments.slice(0, 3);
+  const build = segments.slice(3).join(".");
+  if (numbers.length !== 3) return undefined;
+  if (!numbers.every((part) => part !== "" && isMadeOf(part, DIGITS))) {
+    return undefined;
+  }
+  if (segments.length === 3) return numbers;
+  const buildStart = build.slice(0, 1);
+  if (buildStart === "" || !isMadeOf(buildStart, ALPHANUMERIC)) {
+    return undefined;
+  }
+  return isMadeOf(build, `${ALPHANUMERIC}.-`) ? numbers : undefined;
+}
+
+export function parseGitVersion(output: string): GitVersion {
+  const digits = versionDigits(output);
+  if (digits === undefined) {
+    return { _tag: "InvalidGitVersion", observed: output };
+  }
+
+  const parts = digits.map(Number);
   const major = parts[0];
   const minor = parts[1];
   const patch = parts[2];

@@ -8,6 +8,7 @@
 
 import {
   brandWithCapability,
+  causeMessage,
   chain,
   err,
   handleThrow,
@@ -130,7 +131,7 @@ function planIssue(
         }),
       (cause) => ({
         type: "TokenIssueFailed" as const,
-        cause: cause instanceof Error ? cause.message : String(cause),
+        cause: causeMessage(cause, "Token issue failed"),
       }),
     );
     if (tokenResult._tag === "Err") return tokenResult;

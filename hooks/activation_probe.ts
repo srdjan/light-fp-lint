@@ -8,7 +8,7 @@ export function ambientProbe(): number {
 }
 
 export function thrownProbe(): never {
-  throw new Error("Light FP activation probe");
+  throw "Light FP activation probe";
 }
 
 export function discardedProbe(): number {
@@ -47,4 +47,8 @@ export function statementProbe(flag: boolean): void {
   while (flag) {
     return;
   }
+}
+
+export function operatorProbe(left: number, right: number): boolean {
+  return left == right;
 }

@@ -14,6 +14,7 @@ Deno.test("plugin: exposes the documented rule set", () => {
     "no-oo",
     "no-throw",
     "no-unsafe-cast",
+    "operator-forms",
     "prefer-type-for-data",
     "pure-module",
     "readonly-data",
@@ -33,6 +34,7 @@ Deno.test("plugin: every rule reports with a hint", () => {
     "function-forms": `export function f(a = 1): number { return a; }`,
     "statement-forms":
       `export function f(x: boolean): void { while (x) { return; } }`,
+    "operator-forms": `export const a = (x: number): boolean => x == 1;`,
     "pure-module": `let n = 0;`,
     "no-ambient-effects": `export const now = Date.now();`,
     "no-throw": `export const f = () => { throw new Error("x"); };`,

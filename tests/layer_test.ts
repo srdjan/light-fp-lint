@@ -1,5 +1,5 @@
 import { assertEquals } from "@std/assert";
-import { layerOf, pathWithinRoot } from "../src/layer.ts";
+import { isAdapterPath, layerOf, pathWithinRoot } from "../src/layer.ts";
 import plugin from "../src/mod.ts";
 
 // layerOf needs a SourceCode, and the only way to get a real one is from inside a
@@ -148,4 +148,57 @@ Deno.test("layer: a miscased pragma token is invalid", () => {
     .runPlugin(plugin, "/repo/src/core/x.ts", "// @light-fp Adapter\n")
     .filter((d) => d.id === "light-fp/layer-boundary");
   assertEquals(found.length, 1);
+});
+
+Deno.test("layer: the pragma tolerates any whitespace between its parts", () => {
+  const adapterSources: readonly string[] = [
+    "//   @light-fp   adapter\n",
+    "//@light-fp adapter\n",
+    "// @light-fp\tadapter\n",
+    "// @light-fp\u00A0adapter\n",
+    "// @light-fp adapter extra words\n",
+    "/*\n @light-fp adapter\n*/\n",
+    "/* @light-fp\nadapter */\n",
+  ];
+  for (const source of adapterSources) {
+    assertEquals(probe(source, "/repo/src/core/x.ts"), "adapter", source);
+  }
+});
+
+Deno.test("layer: the pragma needs whitespace, then a token, after its name", () => {
+  const domainSources: readonly string[] = [
+    "// @light-fpadapter\n",
+    "// @light-fp\n",
+    "// @light-fp   \n",
+    "// x @light-fp adapter\n",
+    "// @light-fp-adapter\n",
+  ];
+  for (const source of domainSources) {
+    assertEquals(probe(source, "/repo/src/core/x.ts"), "domain", source);
+  }
+});
+
+Deno.test("layer: a pragma token ends at the next whitespace", () => {
+  const found = Deno.lint
+    .runPlugin(plugin, "/repo/src/core/x.ts", "// @light-fp adaptér more\n")
+    .filter((d) => d.id === "light-fp/layer-boundary");
+  assertEquals(found.length, 1);
+  assertEquals(
+    probe("// @light-fp prelude\u2003and more\n", "/repo/src/core/x.ts"),
+    "prelude",
+  );
+});
+
+Deno.test("layer: a query or fragment never makes a path an adapter path", () => {
+  assertEquals(
+    isAdapterPath("/repo/src/core/x.ts?v=1#adapters/y", undefined),
+    false,
+  );
+  assertEquals(
+    isAdapterPath("/repo/src/core/x.ts#a?b/adapters/c", undefined),
+    false,
+  );
+  assertEquals(isAdapterPath("/repo/src/adapters/x.ts#frag", undefined), true);
+  assertEquals(isAdapterPath("/repo/src/adapters/x.ts?v=1", undefined), true);
+  assertEquals(isAdapterPath("/repo/src/core/main.ts?x", undefined), true);
 });

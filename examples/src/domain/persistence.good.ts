@@ -7,6 +7,7 @@
 
 import {
   brandWithCapability,
+  causeMessage,
   err,
   handleThrow,
   map,
@@ -66,7 +67,7 @@ export function planInsertUser(
           () => cap.insert(validRecord),
           (cause): PersistenceError => ({
             type: "Driver",
-            message: cause instanceof Error ? cause.message : String(cause),
+            message: causeMessage(cause, "Persistence driver failed"),
           }),
         )),
   );
@@ -81,7 +82,7 @@ export function planListAdmins(
         () => cap.findByRole("admin"),
         (cause): PersistenceError => ({
           type: "Driver",
-          message: cause instanceof Error ? cause.message : String(cause),
+          message: causeMessage(cause, "Persistence driver failed"),
         }),
       )),
   );

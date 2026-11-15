@@ -273,3 +273,55 @@ Deno.test("git hook: the minimum Git version compares major, then minor, then pa
   assertEquals(install(2, 56, 0), "Write");
   assertEquals(install(2, 54, 9), "UnsupportedGit");
 });
+
+Deno.test("git hook: the version grammar accepts and refuses exact forms", () => {
+  const accepted: readonly (readonly [string, readonly number[]])[] = [
+    ["git version 2.55.0.0.0", [2, 55, 0]],
+    ["git version 02.055.00", [2, 55, 0]],
+    ["git version 2.55.0.a.", [2, 55, 0]],
+    ["git version 2.55.0.a-b.C9", [2, 55, 0]],
+    ["git version 2.55.0 (a\u2028b)", [2, 55, 0]],
+    ["git version 2.55.0.windows.1 (Apple Git-155)", [2, 55, 0]],
+  ];
+  for (const [raw, expected] of accepted) {
+    const parsed = parseGitVersion(raw);
+    assertEquals(parsed._tag, "GitVersion", raw);
+    if (parsed._tag === "GitVersion") {
+      assertEquals([parsed.major, parsed.minor, parsed.patch], expected, raw);
+    }
+  }
+
+  const refused: readonly string[] = [
+    "git version 2.55.0 ",
+    "git version 2.55.0\n",
+    "git version 2.55.0 ()",
+    "git version 2.55.0 (a(b))",
+    "git version 2.55.0 (a) ",
+    "git version 2.55.0 (a)x",
+    "git version 2.55.0  (a)",
+    "git version 2.55.0 (a\nb)",
+    "git version 2.55.0 (a\rb)",
+    "git version 2.55.0 (a) (b)",
+    "git version 2.55.0.",
+    "git version 2.55.0..a",
+    "git version 2.55.0.-a",
+    "git version 2.55.0.a_b",
+    "git version 2.55.0.a b",
+    "git version 2..0",
+    "git version .55.0",
+    "git version 2.55.0a",
+    "git version \u0662.55.0",
+    "git version  2.55.0",
+    "Git version 2.55.0",
+    "git version",
+    "",
+  ];
+  for (const raw of refused) {
+    assertEquals(parseGitVersion(raw)._tag, "InvalidGitVersion", raw);
+  }
+
+  assertEquals(parseGitVersion("git version 99999999999999999999.1.1"), {
+    _tag: "InvalidGitVersion",
+    observed: "git version 99999999999999999999.1.1",
+  });
+});

@@ -53,7 +53,7 @@ export function measure(
 }
 
 function deltas(baseline: Baseline, current: Baseline): readonly FileDelta[] {
-  return [...new Set([...Object.keys(baseline), ...Object.keys(current)])]
+  return Object.keys({ ...baseline, ...current })
     .toSorted()
     .map((file) => ({
       file,

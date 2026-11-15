@@ -132,3 +132,16 @@ Deno.test("ratchet: each verdict explains itself with an exact message", () => {
     "violations went down; tighten the baseline:\n  a.ts: 3 -> 1",
   );
 });
+
+Deno.test("ratchet: the compared files are the sorted union of both sides", () => {
+  assertEquals(
+    compare({ "b.ts": 1, "a.ts": 2 }, { "a.ts": 1, "c.ts": 0 }),
+    {
+      _tag: "Improved",
+      files: [
+        { file: "a.ts", was: 2, now: 1 },
+        { file: "b.ts", was: 1, now: 0 },
+      ],
+    },
+  );
+});

@@ -20,7 +20,7 @@ export type Layer = "domain" | "adapter" | "prelude";
 
 export const LAYERS: readonly Layer[] = ["domain", "adapter", "prelude"];
 
-const PRAGMA = /^\s*@light-fp\s+(\S+)/;
+const PRAGMA_NAME = "@light-fp";
 
 const ADAPTER_SEGMENTS: readonly string[] = [
   "adapters",
@@ -79,7 +79,7 @@ export function pathWithinRoot(
 }
 
 function pathWithoutDecoration(filename: string): string {
-  return toPosix(filename).split(/[?#]/, 1)[0];
+  return toPosix(filename).split("?")[0].split("#")[0];
 }
 
 function lintableStem(filename: string): string | undefined {
@@ -135,6 +135,19 @@ function isLayer(token: string): token is Layer {
   return LAYERS.some((layer) => layer === token);
 }
 
+// The token after `@light-fp`: leading whitespace, the name, whitespace, then
+// the run of non-whitespace characters. `trim` strips what `\s` matches.
+function pragmaToken(comment: string): string | undefined {
+  const text = comment.trimStart();
+  if (!text.startsWith(PRAGMA_NAME)) return undefined;
+  const afterName = text.slice(PRAGMA_NAME.length);
+  const afterGap = afterName.trimStart();
+  if (afterGap.length === afterName.length || afterGap === "") return undefined;
+  const characters = [...afterGap];
+  const end = characters.findIndex((character) => character.trim() === "");
+  return (end === -1 ? characters : characters.slice(0, end)).join("");
+}
+
 export function readPragma(sourceCode: Deno.lint.SourceCode): PragmaLookup {
   // A pragma only counts as a file header, so it has to precede any statement.
   const firstStatement = sourceCode.ast.body[0];
@@ -144,9 +157,8 @@ export function readPragma(sourceCode: Deno.lint.SourceCode): PragmaLookup {
 
   for (const comment of headerComments(sourceCode, limit)) {
     if (comment.range[0] >= limit) break;
-    const match = PRAGMA.exec(comment.value);
-    if (!match) continue;
-    const token = match[1];
+    const token = pragmaToken(comment.value);
+    if (token === undefined) continue;
     return isLayer(token)
       ? { kind: "valid", layer: token, range: comment.range }
       : { kind: "invalid", token, range: comment.range };

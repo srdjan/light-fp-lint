@@ -146,6 +146,8 @@ Deno.test("Deno floor: the real CLI loads every rule and honors comments", async
       "light-fp/no-discarded-values",
       "light-fp/no-discarded-values",
       "light-fp/no-discarded-values",
+      "light-fp/operator-forms",
+      "light-fp/operator-forms",
       "light-fp/pure-module",
     ]);
   } finally {

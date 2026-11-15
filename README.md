@@ -414,6 +414,38 @@ a chain of member reads such as `state.items`, and it compares source text. The
 Deno parser drops a standalone `;` between statements, and `deno fmt` removes
 it, so only a lone `;` that serves as a body is reported.
 
+### `light-fp/operator-forms`
+
+Domain code compares with strict equality, assigns in its own statement, and
+builds values without coercing or hidden-effect operators.
+
+| Refused form                                                                   | Write instead                                                            | ZTS code |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------ | -------- |
+| `==`, `!=`                                                                     | `===`, `!==`                                                             | ZTS001   |
+| `x++`, `++x`, `x--`, `--x`                                                     | `x = x + 1`                                                              | ZTS001   |
+| A compound assignment, `x += e`, `x **= e`, `x >>>= e`                         | `x = x + e`                                                              | ZTS613   |
+| A logical assignment, `x &&= e`, `x \|\|= e`, `x ??= e`                        | `x = x ?? value`                                                         | ZTS001   |
+| An assignment in an expression, `const m = (n = 2);`, `f(x = 1)`, `a = b = c;` | Assign in its own statement                                              | spec     |
+| An assignment target that calls or assigns, `xs[next()] = 1`, `xs[i++] = 1`    | Compute the key or the object into a `const` first                       | spec     |
+| `x instanceof T`                                                               | Discriminate with a tag field such as `_tag`                             | ZTS001   |
+| `key in record`                                                                | `Object.hasOwn(record, key)`, or check a tag field                       | ZTS001   |
+| Unary `+x`                                                                     | Remove it from a number, or parse text with `parseFloat`/`parseInt`      | ZTS001   |
+| `void x`                                                                       | Write `undefined`, and run an effect as its own statement                | ZTS001   |
+| `delete o.key`                                                                 | Build a new object without the key                                       | ZTS001   |
+| `new T(...)`                                                                   | Call a factory function, or write an object literal                      | ZTS001   |
+| A regex literal, `/a+/g`                                                       | String methods: `includes`, `startsWith`, `endsWith`, `indexOf`, `split` | ZTS001   |
+| A sequence expression, `(a(), b())`                                            | Separate statements                                                      | ZTS003   |
+| A tagged template, `` tag`x` ``                                                | Call the function with a string argument                                 | ZTS003   |
+| An optional call, `f?.()`, `a.b?.()`                                           | Check for `undefined`, then call                                         | ZTS001   |
+| An optional computed access, `xs?.[i]`                                         | Check for `undefined`, then index                                        | ZTS001   |
+| A conditional in an arm of a conditional, `a ? b : c ? d : e`                  | `match` from `ts-pattern`, or `if`/`else`                                | ZTS621   |
+| A comparison with a boolean literal, `x === true`                              | Use the boolean directly: `x` or `!x`                                    | ZTS620   |
+
+An optional member read such as `a?.b` or `a?.b()`, a conditional in the test
+position, and unary `-`, `!`, `~`, and `typeof` stay allowed. The `RegExp` name
+belongs to `ambient-names`, and `new RegExp(...)` already reports as `new`. An
+assignment or a sequence in a `for` header belongs to `statement-forms`.
+
 ## Suppressing a rule
 
 ```ts

@@ -61,13 +61,24 @@ function ensureName(
   return ok(value.trim());
 }
 
+function isDigits(text: string, length: number): boolean {
+  return text.length === length &&
+    [...text].every((character) => "0123456789".includes(character));
+}
+
+function isIsoDate(value: string): boolean {
+  const parts = value.split("-");
+  return parts.length === 3 && isDigits(parts[0], 4) &&
+    isDigits(parts[1], 2) && isDigits(parts[2], 2);
+}
+
 function ensureBirthDate(
   value: string | undefined,
 ): Result<readonly ValidationError[], string> {
   if (!value) {
     return err([{ field: "birthDate", message: "Required ISO string" }]);
   }
-  return /\d{4}-\d{2}-\d{2}/.test(value)
+  return isIsoDate(value)
     ? ok(value)
     : err([{ field: "birthDate", message: "Use YYYY-MM-DD" }]);
 }
@@ -76,9 +87,11 @@ function ensureRoles(
   value: readonly string[] | undefined,
 ): Result<readonly ValidationError[], readonly string[]> {
   if (!value || value.length === 0) return ok(["user"]);
-  const normalized = Array.from(
-    new Set(value.map((role) => role.trim()).filter(Boolean)),
-  );
+  const normalized = value.map((role) => role.trim()).filter(Boolean).filter((
+    role,
+    index,
+    roles,
+  ) => roles.indexOf(role) === index);
   return ok(normalized);
 }
 
