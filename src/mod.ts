@@ -47,6 +47,7 @@ import { statementForms } from "./rules/statement_forms.ts";
 import { recordForms } from "./rules/record_forms.ts";
 import { typeForms } from "./rules/type_forms.ts";
 import { ambientNames } from "./rules/ambient_names.ts";
+import { noEmptyStatement } from "./rules/no_empty_statement.ts";
 import { requireIgnoreReason } from "./rules/require_ignore_reason.ts";
 
 /**
@@ -77,7 +78,8 @@ const plugin: Deno.lint.Plugin = {
     "ambient-names": ambientNames,
     // Supporting: house style rather than soundness.
     "prefer-type-for-data": preferTypeForData,
-    // Meta: keeps the escape hatches visible.
+    // Meta: keeps the gate and its escape hatches visible.
+    "no-empty-statement": noEmptyStatement,
     "require-ignore-reason": requireIgnoreReason,
   },
 };
@@ -93,6 +95,7 @@ export {
   moduleForms,
   noAmbientEffects,
   noDiscardedValues,
+  noEmptyStatement,
   noOo,
   noThrow,
   noUnsafeCast,

@@ -55,6 +55,13 @@ export function statementProbe(flag: ProbeFlag): undefined {
   return undefined;
 }
 
+export function emptyStatementProbe(flag: ProbeFlag): undefined {
+  if (flag) {
+    return undefined;
+  } else;
+  return undefined;
+}
+
 export const recordProbe = { run() {} };
 
 export function operatorProbe(left: ProbeCount, right: ProbeCount): ProbeFlag {

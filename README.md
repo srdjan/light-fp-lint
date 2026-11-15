@@ -154,7 +154,7 @@ entries, which need separate review.
 | Layer     | Rules applied                                                      |
 | --------- | ------------------------------------------------------------------ |
 | `domain`  | all of them                                                        |
-| `adapter` | only `require-ignore-reason`                                       |
+| `adapter` | only `require-ignore-reason` and `no-empty-statement`              |
 | `prelude` | all except `no-throw`, `no-unsafe-cast`, and the restriction rules |
 
 The prelude is intended for the small module defining `Result` and the helpers
@@ -329,6 +329,16 @@ function-property signatures describe capability ports and are left alone.
 Ambient interfaces are also left alone. An interface with `extends` is reported
 without a fix; other reported interfaces are autofixable.
 
+### `light-fp/no-empty-statement`
+
+The rule refuses a standalone `;` and a lone `;` used as a body (`if (x);`,
+`else;`, `while (x);`) in every layer. Deno's plugin AST drops a standalone `;`
+and every later statement in the same list. This was measured on Deno 2.9.8.
+Without this rule, one `;` hides the rest of a file, block, `case` body, or
+`namespace` body from every plugin rule. The rule reports the first character of
+the hidden code. `deno fmt` also deletes a standalone `;`, but the gate does not
+depend on the formatter.
+
 ### `light-fp/require-ignore-reason`
 
 Reports a line suppression naming a `light-fp` rule unless it has a reason of at
@@ -411,7 +421,6 @@ Domain code branches with `if`/`else` and iterates a finite collection with
 | A C-style `for (let i = 0; ...; ...)`                                | `for (const x of xs)`, or `for (const i of xs.keys())`     | ZTS001   |
 | `for (const k in record)`                                            | `for (const key of Object.keys(record))`                   | ZTS001   |
 | A labeled statement, `outer: for (...)`                              | A conditional, or move the loop into a function and return | ZTS001   |
-| A standalone `;`, or a lone `;` as a body, `if (x);`                 | Remove the semicolon, or write a block with a body         | ZTS001   |
 | A `for...of` body that changes the collection that the loop iterates | Read one collection and build the changed one separately   | ZTS622   |
 
 The `for...of` check covers a mutating method call (`push`, `pop`, `shift`,
@@ -420,10 +429,7 @@ The `for...of` check covers a mutating method call (`push`, `pop`, `shift`,
 `xs[i]++`), and `delete xs[i]`. It applies when the iterable is an identifier or
 a chain of member reads such as `state.items`, and it compares source text.
 
-Deno's plugin AST drops a standalone `;` and every later statement in the same
-block, so no plugin rule sees that code. This rule reports the first character
-of such code. The check covers domain files only; in other layers the hidden
-code stays invisible to every rule.
+Empty statements belong to `no-empty-statement`, which runs in every layer.
 
 ### `light-fp/operator-forms`
 
@@ -734,9 +740,8 @@ These limits are measured against the current implementation:
   information. The repository file `plans/004-typescript-restrictions.md`
   classifies every zts-model-1 restriction.
 - **Deno's plugin AST drops a standalone `;` and the statements after it.** This
-  was measured on Deno 2.9.8. `statement-forms` reports the hidden code in
-  domain files. In prelude and adapter files, the hidden code stays invisible to
-  every rule.
+  was measured on Deno 2.9.8. `no-empty-statement` reports the hidden code in
+  every layer.
 - **Optional-call detection reads source text.** Deno sets `optional` on every
   node of an optional chain, so `operator-forms` looks for `?.` in the source. A
   comment between a callee and its `?.` hides an optional call.

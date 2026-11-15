@@ -4,6 +4,7 @@
 // - `no-discarded-values` reports ignored push results.
 // - `no-ambient-effects` reports `Date.now()` and zero-argument `new Date()`.
 // - `statement-forms` reports the `switch`.
+// - `no-empty-statement` reports the `else;`.
 
 interface SignupForm { // prefer-type-for-data
   name?: string; // readonly-data
@@ -38,6 +39,15 @@ export function toPersistenceRecord(form: SignupForm): Record<string, unknown> {
     ? form.birthDate
     : new Date(form.birthDate ?? Date.now()); // no-ambient-effects
   return { ...form, createdAt: Date.now() }; // no-ambient-effects
+}
+
+type Present = boolean;
+
+export function hasEmail(form: SignupForm): Present {
+  if (form.email) {
+    return true;
+  } else; // no-empty-statement
+  return false;
 }
 
 type Label = string;

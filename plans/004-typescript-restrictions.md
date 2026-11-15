@@ -114,18 +114,18 @@ reason. D7 groups are marked G1 to G4.
 
 ### Statements and control flow
 
-| Restriction                                          | Code           | Verdict                                                                                                                                                                                                                |
-| ---------------------------------------------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `switch`                                             | ZTS001         | Adopt: `statement-forms`, hint `match` from `ts-pattern`                                                                                                                                                               |
-| `while`, `do...while`, C-style `for`                 | ZTS001         | Adopt: `statement-forms`                                                                                                                                                                                               |
-| `for...in`                                           | ZTS001         | Adopt: `statement-forms`                                                                                                                                                                                               |
-| Labeled statement                                    | ZTS001         | Adopt: `statement-forms`                                                                                                                                                                                               |
-| Empty statement `;`                                  | ZTS001         | Adopt: `statement-forms`. Deno 2.9.8 drops a standalone `;` and every later statement in the same list from the plugin AST, so the rule reports any non-comment text between the visible statements of a block or file |
-| `for...of` body that mutates its iterated identifier | ZTS622         | Adopt: `statement-forms` (mutating method call, index write, or `length` write on the same name)                                                                                                                       |
-| `throw`, `try`                                       | ZTS001         | Covered: `no-throw`                                                                                                                                                                                                    |
-| `debugger`                                           | ZTS001         | Covered: Deno `no-debugger`                                                                                                                                                                                            |
-| `break` outside a loop                               | ZTS022, ZTS023 | Covered: TypeScript parser                                                                                                                                                                                             |
-| Fallback `assert`, `range(n)` members                | ZTS002, ZTS201 | Skip: ZTS-only                                                                                                                                                                                                         |
+| Restriction                                          | Code           | Verdict                                                                                          |
+| ---------------------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------ |
+| `switch`                                             | ZTS001         | Adopt: `statement-forms`, hint `match` from `ts-pattern`                                         |
+| `while`, `do...while`, C-style `for`                 | ZTS001         | Adopt: `statement-forms`                                                                         |
+| `for...in`                                           | ZTS001         | Adopt: `statement-forms`                                                                         |
+| Labeled statement                                    | ZTS001         | Adopt: `statement-forms`                                                                         |
+| Empty statement `;`                                  | ZTS001         | Moved to `no-empty-statement`, which runs in every layer (plan 005).                             |
+| `for...of` body that mutates its iterated identifier | ZTS622         | Adopt: `statement-forms` (mutating method call, index write, or `length` write on the same name) |
+| `throw`, `try`                                       | ZTS001         | Covered: `no-throw`                                                                              |
+| `debugger`                                           | ZTS001         | Covered: Deno `no-debugger`                                                                      |
+| `break` outside a loop                               | ZTS022, ZTS023 | Covered: TypeScript parser                                                                       |
+| Fallback `assert`, `range(n)` members                | ZTS002, ZTS201 | Skip: ZTS-only                                                                                   |
 
 ### Operators and expressions
 

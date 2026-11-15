@@ -119,6 +119,7 @@ export const expectedExampleDiagnostics: Readonly<
     "light-fp/no-ambient-effects",
     "light-fp/no-discarded-values",
     "light-fp/no-discarded-values",
+    "light-fp/no-empty-statement",
     "light-fp/no-throw",
     "light-fp/no-unsafe-cast",
     "light-fp/operator-forms",

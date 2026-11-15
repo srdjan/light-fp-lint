@@ -125,6 +125,20 @@ Deno.test("Deno floor: the real CLI loads every rule and honors comments", async
     assertEquals(adapterOutput.code, 0, decoder.decode(adapterOutput.stderr));
     assertEquals(pluginCodes(adapterOutput.stdout), []);
 
+    const hidden = join(directory, "hidden.ts");
+    await Deno.writeTextFile(
+      hidden,
+      [
+        "// @light-fp adapter",
+        ";",
+        'export const fail = (): never => { throw new Error("x"); };',
+      ].join("\n"),
+    );
+    const hiddenOutput = await runLint(directory, hidden);
+    assertEquals(pluginCodes(hiddenOutput.stdout), [
+      "light-fp/no-empty-statement",
+    ]);
+
     const edgeCases = join(directory, "edge_cases.ts");
     await Deno.writeTextFile(
       edgeCases,
