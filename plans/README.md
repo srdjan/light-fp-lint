@@ -7,11 +7,12 @@ maintains the index.
 
 ## Execution order and status
 
-| Plan                                   | Title                                                        | Priority | Effort | Depends on | Status |
-| -------------------------------------- | ------------------------------------------------------------ | -------- | ------ | ---------- | ------ |
-| [001](001-distribute-light-fp-gate.md) | Distribute the Light FP gate for developers and Codex agents | P1       | M      | -          | DONE   |
-| [002](002-rederive-review.md)          | Rederive review: baseline + ranked re-basing plan            | P2       | S      | -          | DONE   |
-| [003](003-five-pass-quality-rebase.md) | Five-pass quality rebase                                     | P1       | M      | -          | DONE   |
+| Plan                                   | Title                                                        | Priority | Effort | Depends on | Status      |
+| -------------------------------------- | ------------------------------------------------------------ | -------- | ------ | ---------- | ----------- |
+| [001](001-distribute-light-fp-gate.md) | Distribute the Light FP gate for developers and Codex agents | P1       | M      | -          | DONE        |
+| [002](002-rederive-review.md)          | Rederive review: baseline + ranked re-basing plan            | P2       | S      | -          | DONE        |
+| [003](003-five-pass-quality-rebase.md) | Five-pass quality rebase                                     | P1       | M      | -          | DONE        |
+| [004](004-typescript-restrictions.md)  | TypeScript restrictions from the zts-model-1 profile         | P1       | L      | -          | IN PROGRESS |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (`reason`) | REJECTED
 (`reason`)
