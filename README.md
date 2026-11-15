@@ -403,16 +403,19 @@ Domain code branches with `if`/`else` and iterates a finite collection with
 | A C-style `for (let i = 0; ...; ...)`                                | `for (const x of xs)`, or `for (const i of xs.keys())`     | ZTS001   |
 | `for (const k in record)`                                            | `for (const key of Object.keys(record))`                   | ZTS001   |
 | A labeled statement, `outer: for (...)`                              | A conditional, or move the loop into a function and return | ZTS001   |
-| A lone semicolon as a body, `if (x);`                                | A block with a body, or remove the statement               | ZTS001   |
+| A standalone `;`, or a lone `;` as a body, `if (x);`                 | Remove the semicolon, or write a block with a body         | ZTS001   |
 | A `for...of` body that changes the collection that the loop iterates | Read one collection and build the changed one separately   | ZTS622   |
 
 The `for...of` check covers a mutating method call (`push`, `pop`, `shift`,
 `unshift`, `splice`, `sort`, `reverse`, `fill`, `copyWithin`, `set`, `add`,
 `delete`, `clear`), a write to a member (`xs[i] = v`, `xs.length = 0`,
 `xs[i]++`), and `delete xs[i]`. It applies when the iterable is an identifier or
-a chain of member reads such as `state.items`, and it compares source text. The
-Deno parser drops a standalone `;` between statements, and `deno fmt` removes
-it, so only a lone `;` that serves as a body is reported.
+a chain of member reads such as `state.items`, and it compares source text.
+
+Deno's plugin AST drops a standalone `;` and every later statement in the same
+block, so no plugin rule sees that code. This rule reports the first character
+of such code. The check covers domain files only; in other layers the hidden
+code stays invisible to every rule.
 
 ### `light-fp/operator-forms`
 

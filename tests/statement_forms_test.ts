@@ -62,8 +62,44 @@ check("statement-forms", [
       `function f(xs: readonly number[]): void { outer: for (const x of xs) { for (const y of xs) { if (y === x) { continue outer; } } } }`,
     expect: fires("statement-forms"),
   },
-  // Empty statements. Deno's parser drops a standalone `;` and keeps only a
-  // lone `;` used as a body, so the body forms are the observable ones.
+  // Empty statements. Deno's plugin AST drops a standalone `;` and every later
+  // statement in the same list, so no other rule sees that code. A lone `;`
+  // used as a body is kept as a `null` body.
+  {
+    name: "a standalone semicolon hides the statements after it",
+    source: `export const b = 1;\n;\nlet a = 0;`,
+    expect: fires("statement-forms"),
+  },
+  {
+    name: "a leading semicolon hides the whole file",
+    source: `;\nlet a = 0;`,
+    expect: fires("statement-forms"),
+  },
+  {
+    name: "two semicolons in one gap are one report",
+    source: `;;\nexport const a = 1;`,
+    expect: fires("statement-forms"),
+  },
+  {
+    name: "a standalone semicolon in a function body",
+    source: `export function f(): number { ; return 1; }`,
+    expect: fires("statement-forms"),
+  },
+  {
+    name: "a standalone semicolon in a nested block",
+    source: `export function f(): number { { ; } return 1; }`,
+    expect: fires("statement-forms"),
+  },
+  {
+    name: "a semicolon inside a comment is not code",
+    source: `export const a = 1; // a ; comment\n/* ; */`,
+    expect: silent,
+  },
+  {
+    name: "a shebang line is not hidden code",
+    source: `#!/usr/bin/env -S deno run\nexport const a = 1;`,
+    expect: silent,
+  },
   {
     name: "an if with a lone semicolon body",
     source: `function f(): void { if (check()) ; }`,

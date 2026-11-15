@@ -87,7 +87,46 @@ export const statementForms: Deno.lint.Rule = {
       if (target.type === "MemberExpression") reportLive(node, target.object);
     };
 
-    // Deno's parser drops a standalone `;` and stores a lone `;` body as `null`.
+    // Deno's plugin AST drops a standalone `;` and every later statement in the
+    // same list (measured on Deno 2.9.8), so no rule sees that code. Text that
+    // remains between the visible statements, outside comments, is that code.
+    const comments = context.sourceCode.getAllComments();
+
+    const reportHiddenCode = (
+      start: number,
+      statements: readonly Deno.lint.Node[],
+      end: number,
+    ): void => {
+      const text = context.sourceCode.text;
+      const bounds = [
+        start,
+        ...statements.flatMap((statement) => statement.range),
+        end,
+      ];
+      for (let index = 0; index < bounds.length; index += 2) {
+        const gap = comments.reduce(
+          (masked, comment) =>
+            comment.range[0] >= bounds[index] &&
+              comment.range[1] <= bounds[index + 1]
+              ? masked.slice(0, comment.range[0] - bounds[index]) +
+                " ".repeat(comment.range[1] - comment.range[0]) +
+                masked.slice(comment.range[1] - bounds[index])
+              : masked,
+          text.slice(bounds[index], bounds[index + 1]),
+        );
+        const offset = gap.search(/\S/);
+        if (offset === -1) continue;
+        const at = bounds[index] + offset;
+        context.report({
+          range: [at, at + 1],
+          message:
+            "Deno hides an empty statement and every statement after it in the same block from lint rules.",
+          hint: "Remove the standalone semicolon.",
+        });
+      }
+    };
+
+    // A lone `;` used as a body is stored as a `null` body.
     const reportEmptyBody = (
       node: Deno.lint.Node,
       body: Deno.lint.Node | null,
@@ -101,6 +140,21 @@ export const statementForms: Deno.lint.Rule = {
     };
 
     return {
+      Program(node) {
+        const text = context.sourceCode.text;
+        const newline = text.indexOf("\n");
+        const start = !text.startsWith("#!")
+          ? 0
+          : newline === -1
+          ? text.length
+          : newline + 1;
+        reportHiddenCode(start, node.body, text.length);
+      },
+
+      BlockStatement(node) {
+        reportHiddenCode(node.range[0] + 1, node.body, node.range[1] - 1);
+      },
+
       IfStatement(node) {
         reportEmptyBody(node, node.consequent);
       },
