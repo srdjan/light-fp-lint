@@ -205,23 +205,68 @@ different reason. The plan accepts the overlap instead of coupling rules.
 
 ## Units
 
-| Unit | Work                                                            | Model  | Files                                                                      | Acceptance                                           | Turns |
-| ---- | --------------------------------------------------------------- | ------ | -------------------------------------------------------------------------- | ---------------------------------------------------- | ----- |
-| U0   | D4 fix: `Array<T>` to `readonly T[]`, test first                | Opus   | `src/rules/readonly_data.ts`, `tests/fix_test.ts`                          | the new test fails first, then `deno task ci` passes | -     |
-| U1   | Register nine stub rules                                        | Opus   | `src/mod.ts`, `src/rules/*_forms.ts`, `src/rules/ambient_names.ts`         | `deno task ci` passes                                | -     |
-| U2   | `module-forms`, `lexical-forms`                                 | Sonnet | two rule files, `tests/module_lexical_forms_test.ts`                       | that test passes; check, lint, fmt clean             | 40    |
-| U3   | `declaration-forms`, `function-forms`                           | Sonnet | two rule files, `tests/declaration_function_forms_test.ts`                 | same                                                 | 40    |
-| U4   | `statement-forms`, `operator-forms`                             | Sonnet | two rule files, `tests/statement_operator_forms_test.ts`                   | same                                                 | 50    |
-| U5   | `record-forms`, `type-forms`                                    | Sonnet | two rule files, `tests/record_type_forms_test.ts`                          | same                                                 | 40    |
-| U6   | `ambient-names`                                                 | Sonnet | one rule file, `tests/ambient_names_test.ts`                               | same                                                 | 40    |
-| U7   | Make `src` domain files pass the new rules                      | Sonnet | `src/layer.ts`, `src/ratchet.ts`, `src/git_hook.ts`, any other domain file | `deno task ci` passes, no new suppressions           | 50    |
-| U8   | Make `.good.ts` examples pass; update `.bad.ts` expectations    | Sonnet | `examples/src/**`, `tests/example_expectations.ts`                         | `deno task ci` passes                                | 40    |
-| U9   | README rules, guarantees, limits, prelude example; `q_and_a.md` | Opus   | `README.md`, `q_and_a.md`, `skills/light-fp/SKILL.md`                      | `deno task ci` passes                                | -     |
+Each new rule touches the same census tests, the activation probe, the example
+expectations, and the same domain files. Parallel units would conflict, and a
+registered rule without compliance fails the gate. The units therefore run in
+sequence, and each rule is one vertical slice with its own commit.
 
-U2 to U6 run in parallel after U1. U7 and U8 run after U2 to U6. Executors do
-not commit. Opus reviews each diff, runs the acceptance commands, and commits
-each unit separately. Each test case is a literal source and a literal expected
-count, through `tests/harness.ts`.
+| Unit | Work                                                                                        | Model  | Commits             | Turns |
+| ---- | ------------------------------------------------------------------------------------------- | ------ | ------------------- | ----- |
+| U0   | D4 fix: `Array<T>` to `readonly T[]`, test first                                            | Opus   | 1, done (`3e072d1`) | -     |
+| U1   | `module-forms`, then `lexical-forms`                                                        | Sonnet | 2                   | 60    |
+| U2   | `declaration-forms`, then `function-forms`                                                  | Sonnet | 2                   | 80    |
+| U3   | `statement-forms`, then `operator-forms`                                                    | Sonnet | 2                   | 80    |
+| U4   | `record-forms`, then `type-forms`                                                           | Sonnet | 2                   | 80    |
+| U5   | `ambient-names`                                                                             | Sonnet | 1                   | 60    |
+| U6   | README overview, guarantees, limits, and examples; `q_and_a.md`; `skills/light-fp/SKILL.md` | Opus   | 1                   | -     |
+
+Opus reviews each commit line by line and runs `deno task ci` itself before it
+dispatches the next unit.
+
+## Slice checklist
+
+Do these steps for each rule, in this order.
+
+1. Write `src/rules/<snake_name>.ts`. Copy the two-line adapter pragma header
+   from `src/rules/no_throw.ts`. Put a JSDoc comment on the exported rule. Start
+   `create` with
+   `if (!isDomain(context.filename, context.sourceCode)) return {};`. Give every
+   report a `message` that states what fails and a `hint` that gives the
+   standard TypeScript replacement.
+2. Register the rule in `src/mod.ts`: import it, add it to `plugin.rules` under
+   a `// Restrictions: zts-model-1 forms that apply to standard
+   TypeScript.`
+   group comment, and add it to the named export list.
+3. Write `tests/<snake_name>_test.ts` with `check()` from `tests/harness.ts`.
+   Write one case for each refused form, with an exact count through
+   `fires(rule, n)`. Write one `silent` case for each allowed neighbor form. Add
+   one case with `filename: ADAPTER` and one case with a `// @light-fp prelude`
+   header. Both cases are `silent`. Use literal sources and literal counts only.
+4. Update the census tests:
+   - `tests/plugin_test.ts`: the sorted rule list, and one sample for the hint
+     test.
+   - `hooks/activation_probe.ts`: add one construct that fires the rule. Every
+     current line must still fire its rule.
+   - `tests/deno_2_2_cli_test.ts`: the exact codes for the edge-case file.
+   - `examples/src`: `tests/examples_test.ts` needs one firing of the rule. Use
+     a construct that already fires. If none fires, extend the `.bad.ts` file
+     whose theme is closest.
+   - `tests/example_expectations.ts`: the exact literal multisets.
+   - `tests/gate_integrity_test.ts`: the exact ids for each fixture.
+   - `tests/ratchet_test.ts`: `SRC_BASELINE`.
+5. Make every domain file pass the rule, and keep its behavior: `src/layer.ts`,
+   `src/ratchet.ts`, `src/git_hook.ts`, `tests/example_expectations.ts`,
+   `hooks/activation_probe.ts` (except the line that probes the rule), and
+   `examples/src/domain/*.good.ts`. Do not add a suppression. Do not change a
+   layer pragma to escape a rule. If a file cannot pass without a suppression,
+   stop and report it.
+6. In `README.md`, add a `### light-fp/<rule>` section under
+   `## Restriction rules`. Give one sentence of purpose, then a table with the
+   columns `Refused form`, `Write instead`, and `ZTS code`.
+7. Run `deno task ci`. When it passes, stage the explicit paths and commit with
+   the message `feat(<rule>): <imperative summary>`, a short body, and the line
+   `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>`. The pre-commit
+   hook runs `deno task ci` again. Never push, branch, or amend.
 
 ## Out of scope
 
