@@ -7,13 +7,15 @@ import { client } from "../adapters/persistence.ts"; // layer-boundary
 
 const TABLE = "users";
 
+type UserId = number;
+
 type UserRecord = {
   id?: number; // readonly-data
   email: string; // readonly-data
   roles: string[]; // readonly-data twice: property and array
 };
 
-export async function insertUser(record: UserRecord): Promise<number> {
+export async function insertUser(record: UserRecord): Promise<UserId> {
   if (!record.email.includes("@")) {
     throw new Error("Invalid email"); // no-throw
   }

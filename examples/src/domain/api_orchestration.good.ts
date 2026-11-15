@@ -18,6 +18,10 @@ import {
 
 type HttpMethod = "GET" | "POST";
 
+export type Token = string;
+
+export type Timestamp = number;
+
 export type HttpRequest = {
   readonly method: HttpMethod;
   readonly path: string;
@@ -45,7 +49,7 @@ export type HttpEffect = WithCapability<
   Result<ApiError, HttpResponse>
 >;
 
-function bearer(token: string): string {
+function bearer(token: Token): string {
   return `Bearer ${token}`;
 }
 
@@ -56,7 +60,7 @@ function networkError(cause: unknown): ApiError {
   };
 }
 
-function buildProfileRequest(token: string): Result<ApiError, HttpRequest> {
+function buildProfileRequest(token: Token): Result<ApiError, HttpRequest> {
   return token.trim().length === 0
     ? err({ type: "Unauthorized", message: "Missing token" })
     : ok({
@@ -67,9 +71,9 @@ function buildProfileRequest(token: string): Result<ApiError, HttpRequest> {
 }
 
 function buildAuditRequest(
-  token: string,
+  token: Token,
   event: Readonly<Record<string, unknown>>,
-  issuedAt: number,
+  issuedAt: Timestamp,
 ): Result<ApiError, HttpRequest> {
   return token.trim().length === 0
     ? err({ type: "Unauthorized", message: "Missing token" })
@@ -86,7 +90,7 @@ function buildAuditRequest(
 
 export function planProfileFetch(
   cap: HttpCapability,
-  token: string,
+  token: Token,
 ): Result<ApiError, HttpEffect> {
   return map(
     buildProfileRequest(token),
@@ -108,9 +112,9 @@ export function planProfileFetch(
 
 export function planAuditPost(
   cap: HttpCapability,
-  token: string,
+  token: Token,
   event: Readonly<Record<string, unknown>>,
-  issuedAt: number,
+  issuedAt: Timestamp,
 ): Result<ApiError, HttpEffect> {
   return map(
     buildAuditRequest(token, event, issuedAt),

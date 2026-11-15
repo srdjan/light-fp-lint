@@ -45,6 +45,7 @@ import { moduleForms } from "./rules/module_forms.ts";
 import { operatorForms } from "./rules/operator_forms.ts";
 import { statementForms } from "./rules/statement_forms.ts";
 import { recordForms } from "./rules/record_forms.ts";
+import { typeForms } from "./rules/type_forms.ts";
 import { requireIgnoreReason } from "./rules/require_ignore_reason.ts";
 
 /**
@@ -71,6 +72,7 @@ const plugin: Deno.lint.Plugin = {
     "statement-forms": statementForms,
     "operator-forms": operatorForms,
     "record-forms": recordForms,
+    "type-forms": typeForms,
     // Supporting: house style rather than soundness.
     "prefer-type-for-data": preferTypeForData,
     // Meta: keeps the escape hatches visible.
@@ -98,13 +100,15 @@ export {
   recordForms,
   requireIgnoreReason,
   statementForms,
+  typeForms,
 };
-export { type Layer, layerOf } from "./layer.ts";
+export { type FileName, type Layer, layerOf } from "./layer.ts";
 export {
   type Baseline,
   compare,
   type CountDiagnostics,
   explain,
+  type Explanation,
   type FileDelta,
   measure,
   type Verdict,

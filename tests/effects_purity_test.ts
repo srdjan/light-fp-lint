@@ -31,17 +31,17 @@ for (
     {
       name: "a local timer binding is not the ambient timer",
       source:
-        `function setTimeout(run: () => void): void { return run(); }\nexport function schedule(run: () => void): void { return setTimeout(run); }`,
+        `type Run = () => undefined;\nfunction setTimeout(run: Run): undefined { return run(); }\nexport function schedule(run: Run): undefined { return setTimeout(run); }`,
     },
     {
       name: "an imported fetch binding is not ambient",
       source:
-        `import { fetch } from "../ports/http.ts";\nexport function load(url: string): string { return fetch(url); }`,
+        `import { fetch } from "../ports/http.ts";\ntype Url = string;\nexport function load(url: Url): Url { return fetch(url); }`,
     },
     {
       name: "a sourceless export of a local fetch binding is not ambient",
       source:
-        `function fetch(u: string): string { return u; }\nexport { fetch };`,
+        `type Url = string;\nfunction fetch(u: Url): Url { return u; }\nexport { fetch };`,
     },
   ] as const
 ) {

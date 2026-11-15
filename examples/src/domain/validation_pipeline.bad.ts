@@ -40,7 +40,9 @@ export function toPersistenceRecord(form: SignupForm): Record<string, unknown> {
   return { ...form, createdAt: Date.now() }; // no-ambient-effects
 }
 
-export function describeRole(role: string): string {
+type Label = string;
+
+export function describeRole(role: Label): Label {
   switch (role) { // statement-forms
     case "admin":
       return "Administrator";

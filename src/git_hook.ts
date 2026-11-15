@@ -61,8 +61,14 @@ export type HookDecision =
     readonly otherEntries: number;
   };
 
+/** One command-line argument. */
+export type CliArgument = string;
+
+/** The text that `git --version` prints. */
+export type GitOutput = string;
+
 export function parseHookCommand(
-  args: readonly string[],
+  args: readonly CliArgument[],
 ): HookCommand | undefined {
   if (args.length !== 1) return undefined;
   const arg = args[0];
@@ -114,7 +120,7 @@ function versionDigits(output: string): readonly string[] | undefined {
   return isMadeOf(build, `${ALPHANUMERIC}.-`) ? numbers : undefined;
 }
 
-export function parseGitVersion(output: string): GitVersion {
+export function parseGitVersion(output: GitOutput): GitVersion {
   const digits = versionDigits(output);
   if (digits === undefined) {
     return { _tag: "InvalidGitVersion", observed: output };

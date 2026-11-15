@@ -16,6 +16,9 @@ export type Baseline = Readonly<Record<string, number>>;
 /** Counts the diagnostics one file produces. Supplied by the caller. */
 export type CountDiagnostics = (path: string, source: string) => number;
 
+/** The text that tells a person why a verdict failed. Empty when it passed. */
+export type Explanation = string;
+
 /** One file whose violation count moved between two measurements. */
 export type FileDelta = {
   readonly file: string;
@@ -86,7 +89,7 @@ function listing(files: readonly FileDelta[]): string {
 }
 
 /** A message suitable for a failing test. */
-export function explain(verdict: Verdict): string {
+export function explain(verdict: Verdict): Explanation {
   if (verdict._tag === "Unchanged") return "";
   if (verdict._tag === "NothingMeasured") {
     return "no files were measured; the ratchet proved nothing";

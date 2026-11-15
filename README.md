@@ -466,6 +466,28 @@ leading spread.
 A getter and a setter belong to `no-oo`. A shorthand property or a spread in an
 object pattern belongs to `declaration-forms`. An array spread stays allowed.
 
+### `light-fp/type-forms`
+
+Domain code writes one spelling for each type and names each raw built-in type
+that an exported function signature exposes.
+
+| Refused form                                                                                                                         | Write instead                                  | ZTS code |
+| ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------- | -------- |
+| `value satisfies T`                                                                                                                  | Annotate the declaration: `const x: T = value` | ZTS043   |
+| `Array<T>`                                                                                                                           | `T[]`, or `readonly T[]` for data              | ZTS058   |
+| `ReadonlyArray<T>`                                                                                                                   | `readonly T[]`                                 | ZTS059   |
+| `void`, including `Promise<void>`                                                                                                    | `undefined`                                    | ZTS060   |
+| `string`, `number`, `boolean`, `object`, `unknown`, an array of them, or a union with one of them, in an exported function signature | A named alias, such as `type Email = string`   | ZTS061   |
+
+The signature check covers each parameter annotation, including the annotation
+of a rest, default, or pattern parameter, and the return annotation. For a
+return annotation, it unwraps one `Promise<X>` and checks `X`. It covers an
+exported function declaration, an exported `declare function`, and a function
+that a source-less `export { f }` list names. An exported function-valued
+`const` belongs to `declaration-forms`. Literal types, `null`, `undefined`,
+`never`, type references, tuples, object types, type predicates, and `asserts`
+stay allowed. `readonly-data` also reports `Array<T>` in a data position.
+
 ## Suppressing a rule
 
 ```ts

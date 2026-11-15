@@ -13,7 +13,7 @@ Deno.test("gate integrity: a bare file ignore is reported", () => {
   assertEquals(
     diagnosticIds(
       "/repo/src/domain/a.ts",
-      "// deno-lint-ignore-file\nexport function f(): number { return 1; }\n",
+      "// deno-lint-ignore-file\nexport function f(): undefined { return undefined; }\n",
     ),
     ["light-fp/require-ignore-reason"],
   );
@@ -23,7 +23,7 @@ Deno.test("gate integrity: a reason cannot authorize a bare file ignore", () => 
   assertEquals(
     diagnosticIds(
       "/repo/src/domain/a.ts",
-      "// deno-lint-ignore-file -- legacy file\nexport function f(): number { return 1; }\n",
+      "// deno-lint-ignore-file -- legacy file\nexport function f(): undefined { return undefined; }\n",
     ),
     ["light-fp/require-ignore-reason"],
   );
@@ -33,7 +33,7 @@ Deno.test("gate integrity: a foreign named file ignore is allowed", () => {
   assertEquals(
     diagnosticIds(
       "/repo/src/domain/a.ts",
-      "// deno-lint-ignore-file no-explicit-any\nexport function f(): number { return 1; }\n",
+      "// deno-lint-ignore-file no-explicit-any\nexport function f(): undefined { return undefined; }\n",
     ),
     [],
   );

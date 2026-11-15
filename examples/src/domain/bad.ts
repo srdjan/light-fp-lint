@@ -14,7 +14,7 @@ export type User = {
 
 export interface Data { // prefer-type-for-data: it carries data, so it is a type
   readonly id: string;
-  readonly run: () => void;
+  readonly run: () => undefined;
 }
 
 export const now = Date.now(); // no-ambient-effects, pure-module
@@ -23,7 +23,7 @@ let requestCount = 0; // pure-module: module-level mutable state
 
 export class Foo {} // no-oo
 
-export function make(): number {
+export function make(): number { // type-forms: a raw number in an exported signature
   throw new Error("nope"); // no-throw
 }
 

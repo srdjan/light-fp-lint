@@ -21,6 +21,7 @@ Deno.test("plugin: exposes the documented rule set", () => {
     "record-forms",
     "require-ignore-reason",
     "statement-forms",
+    "type-forms",
   ]);
 });
 
@@ -36,6 +37,7 @@ Deno.test("plugin: every rule reports with a hint", () => {
     "statement-forms":
       `export function f(x: boolean): void { while (x) { return; } }`,
     "operator-forms": `export const a = (x: number): boolean => x == 1;`,
+    "type-forms": `export function f(): number { return 1; }`,
     "record-forms": `const v = 1; export const a = { v };`,
     "pure-module": `let n = 0;`,
     "no-ambient-effects": `export const now = Date.now();`,

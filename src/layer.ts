@@ -18,6 +18,12 @@ import { headerComments } from "./comments.ts";
  */
 export type Layer = "domain" | "adapter" | "prelude";
 
+/** A file path or an import specifier, as the linter receives it. */
+export type FileName = string;
+
+/** The yes-or-no answer to a question about a file name. */
+export type Answer = boolean;
+
 export const LAYERS: readonly Layer[] = ["domain", "adapter", "prelude"];
 
 const PRAGMA_NAME = "@light-fp";
@@ -43,12 +49,12 @@ const LINTABLE_EXTENSIONS = [
 
 const TEST_MARKERS = ["_test", ".test", "_bench", ".bench"];
 
-export function toPosix(filename: string): string {
+export function toPosix(filename: FileName): FileName {
   return filename.replaceAll("\\", "/");
 }
 
 /** True when an import specifier names a file by path, not by package. */
-export function isRelativeSpecifier(specifier: string): boolean {
+export function isRelativeSpecifier(specifier: FileName): Answer {
   return specifier.startsWith(".") || specifier.startsWith("/");
 }
 
@@ -67,9 +73,9 @@ function currentRoot(): string | undefined {
 }
 
 export function pathWithinRoot(
-  filename: string,
-  root: string | undefined,
-): string {
+  filename: FileName,
+  root: FileName | undefined,
+): FileName {
   const posix = toPosix(filename);
   if (!root) return posix;
 
@@ -95,9 +101,9 @@ function lintableStem(filename: string): string | undefined {
  * both to classify files and to enforce imports into adapter paths.
  */
 export function isAdapterPath(
-  filename: string,
-  root: string | undefined,
-): boolean {
+  filename: FileName,
+  root: FileName | undefined,
+): Answer {
   const segments = pathWithinRoot(pathWithoutDecoration(filename), root)
     .split("/")
     .filter(Boolean);
@@ -110,7 +116,7 @@ export function isAdapterPath(
 
 // Split the name at its extension rather than precomputing every marker and
 // extension pair. Two literal arrays and no work at import time.
-export function isTestFile(filename: string): boolean {
+export function isTestFile(filename: FileName): Answer {
   const posix = toPosix(filename);
   const stem = lintableStem(posix);
   if (!stem) return false;
@@ -172,7 +178,7 @@ export function readPragma(sourceCode: Deno.lint.SourceCode): PragmaLookup {
  * would disappear the moment someone renamed a directory, with no diagnostic.
  */
 export function layerOf(
-  filename: string,
+  filename: FileName,
   sourceCode: Deno.lint.SourceCode,
 ): Layer {
   const pragma = readPragma(sourceCode);
@@ -188,16 +194,16 @@ export function layerOf(
 
 /** True for files the strict domain rules apply to. */
 export function isDomain(
-  filename: string,
+  filename: FileName,
   sourceCode: Deno.lint.SourceCode,
-): boolean {
+): Answer {
   return layerOf(filename, sourceCode) === "domain";
 }
 
 /** The prelude defines Result and the effect brands, so it may throw and cast. */
 export function isPrelude(
-  filename: string,
+  filename: FileName,
   sourceCode: Deno.lint.SourceCode,
-): boolean {
+): Answer {
   return layerOf(filename, sourceCode) === "prelude";
 }

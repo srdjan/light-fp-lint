@@ -6,7 +6,9 @@
 // Mutable module data is risky, but constructing this array is not reported.
 const responseCache: unknown[] = [];
 
-export async function requestUserProfile(token: string) {
+type Token = string;
+
+export async function requestUserProfile(token: Token) {
   const res = await fetch("https://api.example.com/me", { // no-ambient-effects
     method: "GET",
     headers: { authorization: `Bearer ${token}` },
@@ -21,7 +23,7 @@ export async function requestUserProfile(token: string) {
 }
 
 export async function postAuditEvent(
-  token: string,
+  token: Token,
   event: Record<string, unknown>,
 ) {
   const res = await fetch("https://api.example.com/audit", { // no-ambient-effects
