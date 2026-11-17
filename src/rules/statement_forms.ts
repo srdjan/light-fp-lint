@@ -1,6 +1,6 @@
 // @light-fp adapter -- a lint rule adapts Deno's visitor API: it reports through a
 // void callback and is driven by mutation it does not own.
-import { childValuesOf, isNode } from "../ast.ts";
+import { childValuesOf, isNode, type SyntaxNode } from "../ast.ts";
 import { isDomain } from "../layer.ts";
 
 const MUTATING_METHODS: readonly string[] = [
@@ -28,6 +28,111 @@ const isReadChain = (node: Deno.lint.Node): boolean =>
   node.type === "Identifier" ||
   (node.type === "MemberExpression" && !node.computed &&
     isReadChain(node.object));
+
+/** The identifier at the root of a read chain. */
+const rootOf = (node: Deno.lint.Node): Deno.lint.Node =>
+  node.type === "MemberExpression" ? rootOf(node.object) : node;
+
+/** True when `value` holds an identifier named `name`, in a pattern or anywhere below it. */
+const mentions = (value: unknown, name: string): boolean => {
+  if (Array.isArray(value)) return value.some((item) => mentions(item, name));
+  if (!isNode(value)) return false;
+  if (value.type === "Identifier") return value.name === name;
+  return childValuesOf(value).some((child) => mentions(child, name));
+};
+
+/** The statements of a block or program, with each exported declaration unwrapped. */
+const statementsOf = (node: SyntaxNode): readonly Deno.lint.Node[] => {
+  if (node.type !== "BlockStatement" && node.type !== "Program") return [];
+  return node.body.map((statement) =>
+    statement.type === "ExportNamedDeclaration" && statement.declaration
+      ? statement.declaration
+      : statement
+  );
+};
+
+type Binding = { readonly alias: Deno.lint.Node | undefined };
+
+const isFunction = (
+  node: SyntaxNode,
+): node is
+  | Deno.lint.FunctionDeclaration
+  | Deno.lint.FunctionExpression
+  | Deno.lint.ArrowFunctionExpression =>
+  node.type === "FunctionDeclaration" ||
+  node.type === "FunctionExpression" ||
+  node.type === "ArrowFunctionExpression";
+
+/**
+ * The binding of `name` that `scope` declares. `alias` is the read chain of a
+ * `const` bound to one, and undefined for any other binding. The result is
+ * undefined when `scope` does not bind `name`.
+ */
+const bindingIn = (scope: SyntaxNode, name: string): Binding | undefined => {
+  const other: Binding = { alias: undefined };
+  if (isFunction(scope)) {
+    return mentions(scope.params, name) ? other : undefined;
+  }
+  if (scope.type === "CatchClause") {
+    return mentions(scope.param, name) ? other : undefined;
+  }
+  const head =
+    scope.type === "ForOfStatement" || scope.type === "ForInStatement"
+      ? scope.left
+      : scope.type === "ForStatement"
+      ? scope.init
+      : null;
+  if (head?.type === "VariableDeclaration") {
+    return mentions(head.declarations, name) ? other : undefined;
+  }
+  for (const statement of statementsOf(scope)) {
+    if (statement.type === "VariableDeclaration") {
+      for (const declarator of statement.declarations) {
+        if (
+          declarator.id.type === "Identifier" && declarator.id.name === name
+        ) {
+          const init = declarator.init;
+          return statement.kind === "const" && init !== null &&
+              isReadChain(init)
+            ? { alias: init }
+            : other;
+        }
+        if (mentions(declarator.id, name)) return other;
+      }
+    }
+    if (
+      (statement.type === "FunctionDeclaration" ||
+        statement.type === "ClassDeclaration" ||
+        statement.type === "ImportDeclaration") &&
+      mentions(
+        statement.type === "ImportDeclaration"
+          ? statement.specifiers
+          : statement.id,
+        name,
+      )
+    ) {
+      return other;
+    }
+  }
+  return undefined;
+};
+
+/** The read chain that the nearest binding of `name` above `node` aliases, when that binding is a `const` alias. */
+const aliasOf = (
+  node: SyntaxNode,
+  name: string,
+): Deno.lint.Node | undefined => {
+  if (
+    node.type === "Program" || node.type === "Line" || node.type === "Block"
+  ) {
+    return undefined;
+  }
+  const binding = bindingIn(node.parent, name);
+  return binding === undefined ? aliasOf(node.parent, name) : binding.alias;
+};
+
+/** Alias hops followed before the rule stops, so a cycle of names ends. */
+const MAX_ALIAS_HOPS = 8;
 
 const methodName = (node: Deno.lint.MemberExpression): string | undefined => {
   if (!node.computed) {
@@ -86,7 +191,20 @@ export const statementForms: Deno.lint.Rule = {
     const textOf = (node: Deno.lint.Node): string =>
       context.sourceCode.getText(node);
 
-    /** True when `node` sits in the body of a `for...of` over the source text `text`. */
+    /** The text of a read chain, with a `const` alias at its root replaced by the chain that the alias names. */
+    const canonicalText = (node: Deno.lint.Node, hops: number): string => {
+      const text = textOf(node);
+      const root = rootOf(node);
+      if (hops === 0 || !isReadChain(node) || root.type !== "Identifier") {
+        return text;
+      }
+      const alias = aliasOf(root, root.name);
+      return alias === undefined
+        ? text
+        : canonicalText(alias, hops - 1) + text.slice(textOf(root).length);
+    };
+
+    /** True when `node` sits in the body of a `for...of` over a read chain whose canonical text is `text`. */
     const isInLoopOver = (
       node: Deno.lint.Node | Deno.lint.TSParameterProperty,
       text: string,
@@ -100,7 +218,8 @@ export const statementForms: Deno.lint.Rule = {
       const parent = node.parent;
       if (
         parent.type === "ForOfStatement" && parent.body === node &&
-        isReadChain(parent.right) && textOf(parent.right) === text
+        isReadChain(parent.right) &&
+        canonicalText(parent.right, MAX_ALIAS_HOPS) === text
       ) {
         return true;
       }
@@ -111,7 +230,7 @@ export const statementForms: Deno.lint.Rule = {
       node: Deno.lint.Node,
       target: Deno.lint.Node,
     ): void => {
-      if (!isInLoopOver(node, textOf(target))) return;
+      if (!isInLoopOver(node, canonicalText(target, MAX_ALIAS_HOPS))) return;
       context.report({ node, message: LIVE_MESSAGE, hint: LIVE_HINT });
     };
 

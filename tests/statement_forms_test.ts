@@ -207,6 +207,48 @@ check("statement-forms", [
     expect: fires("statement-forms"),
   },
   {
+    name: "an index write through a const alias declared in the loop body",
+    source:
+      `function f(xs: number[]): void { for (const x of xs) { const ys = xs; ys[ys.length] = x; } }`,
+    expect: fires("statement-forms"),
+  },
+  {
+    name: "a mutating call through a const alias declared before the loop",
+    source:
+      `function f(xs: number[]): void { const ys = xs; for (const x of xs) { ys.push(x); } }`,
+    expect: fires("statement-forms"),
+  },
+  {
+    name: "a loop over a const alias that mutates the original",
+    source:
+      `function f(xs: number[]): void { const ys = xs; for (const x of ys) { xs.push(x); } }`,
+    expect: fires("statement-forms"),
+  },
+  {
+    name: "a chain of const aliases of a member chain",
+    source:
+      `function f(state: State): void { for (const x of state.items) { const s = state; const items = s.items; items.push(x); } }`,
+    expect: fires("statement-forms"),
+  },
+  {
+    name: "a let binding is not an alias",
+    source:
+      `function f(xs: number[]): void { for (const x of xs) { let ys = xs; ys = []; ys.push(x); } }`,
+    expect: silent,
+  },
+  {
+    name: "a const bound to a copy is not an alias",
+    source:
+      `function f(xs: number[]): void { for (const x of xs) { const ys = [...xs]; ys.push(x); } }`,
+    expect: silent,
+  },
+  {
+    name: "a parameter shadows an outer const alias",
+    source:
+      `function f(xs: number[]): void { const ys = xs; for (const x of xs) { run((ys: number[]) => ys.push(x)); } }`,
+    expect: silent,
+  },
+  {
     name: "a mutation of another collection is fine",
     source:
       `function f(xs: number[], ys: number[]): void { for (const x of xs) { ys.push(x); } }`,
