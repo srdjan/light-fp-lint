@@ -42,7 +42,9 @@ export const commentLikeProbe = "// deno-lint-ignore light-fp/no-throw";
 // deno-lint-ignore light-fp/no-throw
 export const missingReasonProbe = 0;
 
-export const declarationProbe = (): number => 1;
+export const declarationProbe = function (): number {
+  return 1;
+};
 
 export function functionProbe(count: ProbeCount = 1): ProbeCount {
   return count;
@@ -68,8 +70,6 @@ export function operatorProbe(left: ProbeCount, right: ProbeCount): ProbeFlag {
   return left == right;
 }
 
-export function typeProbe(): number {
-  return 1;
-}
+export const typeProbe = { value: 1 } satisfies object;
 
 export const ambientNameProbe = Symbol;

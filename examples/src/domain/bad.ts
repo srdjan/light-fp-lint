@@ -23,14 +23,26 @@ let requestCount = 0; // pure-module: module-level mutable state
 
 export class Foo {} // no-oo
 
-export function make(): number { // type-forms: a raw number in an exported signature
+export function make(): number {
   throw new Error("nope"); // no-throw
 }
 
-export const record = (input: unknown) => { // declaration-forms: an exported function is a const binding
+export function choose(value: number): number {
+  switch (value) { // statement-forms: the default case does not return
+    case 1:
+      return 1;
+    default:
+      break;
+  }
+  return 0;
+}
+
+export const record = function (input: unknown) { // declaration-forms
   Something.send(input); // no-discarded-values
   return input as Foreign; // no-unsafe-cast: Foreign is not declared here
 };
+
+export const shape = { value: 1 } satisfies object; // type-forms
 
 export const pattern = "\\d+"; // fine: an escaped backslash
 export const label = "a\qb"; // lexical-forms: \q is not an allowed escape

@@ -79,29 +79,44 @@ check("declaration-forms", [
     expect: silent,
   },
   {
-    name: "an exported arrow const is a function-valued binding",
-    source: `export const f = (x: number): number => x;`,
-    expect: fires("declaration-forms"),
+    name: "a local arrow const is an immutable function value",
+    source: `const f = (x: number): number => x;`,
+    expect: silent,
   },
   {
-    name: "an exported function expression const",
-    source: `export const f = function (x: number): number { return x; };`,
-    expect: fires("declaration-forms"),
+    name: "an exported arrow const is an immutable function value",
+    source: `export const f = (x: number): number => x;`,
+    expect: silent,
   },
   {
     name: "an async arrow const",
     source: `const f = async (x: number): Promise<number> => x;`,
-    expect: fires("declaration-forms"),
+    expect: silent,
   },
   {
     name: "a generic arrow const",
     source: `const f = <T>(x: T): T => x;`,
-    expect: fires("declaration-forms"),
+    expect: silent,
   },
   {
     name: "a type-annotated arrow const",
     source: `const f: Handler = (x) => x;`,
-    expect: fires("declaration-forms"),
+    expect: silent,
+  },
+  {
+    name: "an arrow const stored in a record",
+    source: `const f = (): number => 1; const record = { f };`,
+    expect: silent,
+  },
+  {
+    name: "an arrow const passed by reference as a callback",
+    source: `const f = (): number => 1; run(f);`,
+    expect: silent,
+  },
+  {
+    name: "an arrow const inside a function body",
+    source: `function g(): number { const f = (): number => 1; return f(); }`,
+    expect: silent,
   },
   {
     name: "a let arrow binding",
@@ -109,8 +124,13 @@ check("declaration-forms", [
     expect: fires("declaration-forms"),
   },
   {
-    name: "an arrow const inside a function body",
-    source: `function g(): number { const f = (): number => 1; return f(); }`,
+    name: "a const function expression",
+    source: `const f = function (x: number): number { return x; };`,
+    expect: fires("declaration-forms"),
+  },
+  {
+    name: "a let function expression",
+    source: `let f = function (x: number): number { return x; };`,
     expect: fires("declaration-forms"),
   },
   {
@@ -162,14 +182,14 @@ const messagesOf = (source: string): readonly string[] =>
     .filter((d) => d.id === "light-fp/declaration-forms")
     .map((d) => d.message);
 
-Deno.test("declaration-forms: an exported function-valued const names the export", () => {
-  assertEquals(messagesOf(`export const f = () => 1;`), [
+Deno.test("declaration-forms: an exported function expression names the export", () => {
+  assertEquals(messagesOf(`export const f = function () { return 1; };`), [
     "An exported function is declared as a `const` binding.",
   ]);
 });
 
-Deno.test("declaration-forms: a local function-valued const names the helper", () => {
-  assertEquals(messagesOf(`const f = () => 1;`), [
+Deno.test("declaration-forms: a local function expression names the helper", () => {
+  assertEquals(messagesOf(`const f = function () { return 1; };`), [
     "A reusable helper is declared as a `const` binding.",
   ]);
 });

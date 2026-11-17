@@ -81,6 +81,7 @@ export const expectedExampleDiagnostics: Readonly<
     "light-fp/readonly-data",
     "light-fp/readonly-data",
     "light-fp/record-forms",
+    "light-fp/statement-forms",
     "light-fp/type-forms",
   ],
   "domain/effect_composition.bad.ts": [
@@ -133,7 +134,6 @@ export const expectedExampleDiagnostics: Readonly<
     "light-fp/readonly-data",
     "light-fp/readonly-data",
     "light-fp/readonly-data",
-    "light-fp/statement-forms",
   ],
   "domain/validation_pipeline.good.ts": [],
 };

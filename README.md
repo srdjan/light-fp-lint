@@ -381,20 +381,22 @@ with ASCII characters. Legacy octal literals stay with Deno's `no-octal` rule.
 
 ### `light-fp/declaration-forms`
 
-Domain code binds each name on its own and declares each function with a
-`function` declaration.
+Domain code binds each name on its own. An arrow assigned to a `const` is an
+immutable function value. A function expression or a function assigned to a
+mutable binding remains refused.
 
 | Refused form                                                            | Write instead                                     | ZTS code |
 | ----------------------------------------------------------------------- | ------------------------------------------------- | -------- |
 | `const { a } = x`, `const [a] = x`, including `for...of` and `for...in` | Bind the value to one name, then read each member | ZTS001   |
 | A destructuring parameter, such as `function f({ a }: T)`               | Accept one named parameter, then read each member | ZTS001   |
-| `const f = () => ...`, `const f = function ...`, `let f = () => ...`    | `function f(...): T { ... }`                      | ZTS608   |
-| `export const f = () => ...`                                            | `export function f(...): T { ... }`               | ZTS609   |
+| `const f = function ...`                                                | `const f = (...) => ...`                          | ZTS608   |
+| `let f = () => ...`, `let f = function ...`                             | A `const` arrow or function declaration           | ZTS608   |
 
 ### `light-fp/function-forms`
 
-Domain code declares each function by name with a full signature, and each call
-lists its arguments one by one.
+Domain code gives each function declaration a full signature, and each call
+lists its arguments one by one. Immutable function values may use `const`
+arrows.
 
 | Refused form                                                                   | Write instead                                                              | ZTS code |
 | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------- | -------- |
@@ -411,17 +413,22 @@ object method belongs to `record-forms`, and a class method belongs to `no-oo`.
 
 ### `light-fp/statement-forms`
 
-Domain code branches with `if`/`else` and iterates a finite collection with
-`for...of`.
+Domain code branches with `if`/`else` or a return-terminating `switch`, and
+iterates a finite collection with `for...of`.
 
 | Refused form                                                         | Write instead                                              | ZTS code |
 | -------------------------------------------------------------------- | ---------------------------------------------------------- | -------- |
-| `switch`                                                             | `match` from `ts-pattern`, or `if`/`else`                  | ZTS001   |
+| A `switch` with fallthrough or a non-returning case                  | End every case group with an unconditional return          | ZTS001   |
 | `while`, `do...while`                                                | Iterate a finite collection with `for...of`                | ZTS001   |
 | A C-style `for (let i = 0; ...; ...)`                                | `for (const x of xs)`, or `for (const i of xs.keys())`     | ZTS001   |
 | `for (const k in record)`                                            | `for (const key of Object.keys(record))`                   | ZTS001   |
 | A labeled statement, `outer: for (...)`                              | A conditional, or move the loop into a function and return | ZTS001   |
 | A `for...of` body that changes the collection that the loop iterates | Read one collection and build the changed one separately   | ZTS622   |
+
+Empty labels may group into the next returning case body. The final label must
+have a body, every non-empty body must end in a structural return, and no
+`break` or `continue` may occur. A default case is not required. This is a
+structural termination check, not an exhaustiveness proof.
 
 The `for...of` check covers a mutating method call (`push`, `pop`, `shift`,
 `unshift`, `splice`, `sort`, `reverse`, `fill`, `copyWithin`, `set`, `add`,
@@ -482,25 +489,20 @@ object pattern belongs to `declaration-forms`. An array spread stays allowed.
 
 ### `light-fp/type-forms`
 
-Domain code writes one spelling for each type and names each raw built-in type
-that an exported function signature exposes.
+Domain code writes one spelling for each type. Primitive types remain direct in
+exported signatures; a transparent alias does not make them safer.
 
-| Refused form                                                                                                                         | Write instead                                  | ZTS code |
-| ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------- | -------- |
-| `value satisfies T`                                                                                                                  | Annotate the declaration: `const x: T = value` | ZTS043   |
-| `Array<T>`                                                                                                                           | `T[]`, or `readonly T[]` for data              | ZTS058   |
-| `ReadonlyArray<T>`                                                                                                                   | `readonly T[]`                                 | ZTS059   |
-| `void`, including `Promise<void>`                                                                                                    | `undefined`                                    | ZTS060   |
-| `string`, `number`, `boolean`, `object`, `unknown`, an array of them, or a union with one of them, in an exported function signature | A named alias, such as `type Email = string`   | ZTS061   |
+| Refused form                      | Write instead                                  | ZTS code |
+| --------------------------------- | ---------------------------------------------- | -------- |
+| `value satisfies T`               | Annotate the declaration: `const x: T = value` | ZTS043   |
+| `Array<T>`                        | `T[]`, or `readonly T[]` for data              | ZTS058   |
+| `ReadonlyArray<T>`                | `readonly T[]`                                 | ZTS059   |
+| `void`, including `Promise<void>` | `undefined`                                    | ZTS060   |
 
-The signature check covers each parameter annotation, including the annotation
-of a rest, default, or pattern parameter, and the return annotation. For a
-return annotation, it unwraps one `Promise<X>` and checks `X`. It covers an
-exported function declaration, an exported `declare function`, and a function
-that a source-less `export { f }` list names. An exported function-valued
-`const` belongs to `declaration-forms`. Literal types, `null`, `undefined`,
-`never`, type references, tuples, object types, type predicates, and `asserts`
-stay allowed. `readonly-data` also reports `Array<T>` in a data position.
+`string`, `number`, `boolean`, `object`, `unknown`, arrays and unions of them,
+and `Promise` results may appear directly in exported signatures.
+`no-unsafe-cast` still reports `any`, and `readonly-data` still reports mutable
+declared data. `readonly-data` also reports `Array<T>` in a data position.
 
 ### `light-fp/ambient-names`
 
@@ -731,9 +733,10 @@ These limits are measured against the current implementation:
 - **The real CLI has a file-wide suppression hole.** A bare
   `// deno-lint-ignore-file` silences the plugin before `require-ignore-reason`
   can report it. `runPlugin` sees and counts it.
-- **Exhaustiveness is not checked here.** `statement-forms` refuses `switch` in
-  domain files. Use `match` from `ts-pattern` with `.exhaustive()`, or explicit
-  return types, and let `deno check` catch unhandled variants.
+- **Exhaustiveness is not checked here.** `statement-forms` accepts a `switch`
+  when each case group returns, but it does not prove that the cases cover a
+  union. Use an explicit return type and a post-switch `never` check when a
+  closed discriminated union must stay exhaustive.
 - **Restrictions that need types are not enforced.** Non-boolean conditions,
   string `+`, dynamic property access `obj[key]`, effectful conditional arms,
   and `null` handling (ZTS100-106, ZTS605, ZTS612, ZTS624) need type or effect
@@ -745,9 +748,6 @@ These limits are measured against the current implementation:
 - **Optional-call detection reads source text.** Deno sets `optional` on every
   node of an optional chain, so `operator-forms` looks for `?.` in the source. A
   comment between a callee and its `?.` hides an optional call.
-- **Raw exported types are checked on function declarations only.** `type-forms`
-  checks exported `function` declarations. `declaration-forms` already refuses
-  an exported function-valued `const`.
 - **Mutation through an alias is not tracked.** `readonly-data` forces the
   annotations; `deno check` enforces them from there.
 - **Deno 2.2's programmatic lint helper cannot expose source text.** The real

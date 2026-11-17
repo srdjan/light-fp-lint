@@ -4,9 +4,87 @@ import { ADAPTER, check, diagnose, DOMAIN, fires, silent } from "./harness.ts";
 check("statement-forms", [
   // Branching and loops.
   {
-    name: "a switch statement",
+    name: "a return-terminating switch",
     source:
       `function f(x: number): number { switch (x) { case 1: return 1; default: return 2; } }`,
+    expect: silent,
+  },
+  {
+    name: "grouped switch labels share a returning body",
+    source:
+      `function f(x: string): number { switch (x) { case "a": case "b": return 1; default: return 2; } }`,
+    expect: silent,
+  },
+  {
+    name: "a closed switch needs no default",
+    source:
+      `function f(x: "a" | "b"): number { switch (x) { case "a": return 1; case "b": return 2; } }`,
+    expect: silent,
+  },
+  {
+    name: "a no-default switch composes with a post-switch never check",
+    source:
+      `function f(x: "a" | "b"): number { switch (x) { case "a": return 1; case "b": return 2; } const unreachable: never = x; return unreachable; }`,
+    expect: silent,
+  },
+  {
+    name: "a case may end in a returning block",
+    source:
+      `function f(x: number): number { switch (x) { case 1: { return 1; } default: { return 2; } } }`,
+    expect: silent,
+  },
+  {
+    name: "a case may end in an if whose branches return",
+    source:
+      `function f(x: number, flag: boolean): number { switch (x) { case 1: if (flag) { return 1; } else { return 2; } default: return 3; } }`,
+    expect: silent,
+  },
+  {
+    name: "an empty switch",
+    source:
+      `function f(x: number): undefined { switch (x) {} return undefined; }`,
+    expect: fires("statement-forms"),
+  },
+  {
+    name: "a final empty switch label",
+    source:
+      `function f(x: number): number { switch (x) { case 1: return 1; default: } return 2; }`,
+    expect: fires("statement-forms"),
+  },
+  {
+    name: "a conditional return without else",
+    source:
+      `function f(x: number, flag: boolean): number { switch (x) { case 1: if (flag) return 1; default: return 2; } }`,
+    expect: fires("statement-forms"),
+  },
+  {
+    name: "a case that breaks",
+    source:
+      `function f(x: number): number { switch (x) { case 1: break; default: return 2; } return 3; }`,
+    expect: fires("statement-forms"),
+  },
+  {
+    name: "a conditional break before a final return",
+    source:
+      `function f(x: number, flag: boolean): number { switch (x) { case 1: if (flag) break; return 1; default: return 2; } return 3; }`,
+    expect: fires("statement-forms"),
+  },
+  {
+    name: "a conditional continue before a final return",
+    source:
+      `function f(xs: readonly number[], flag: boolean): number { for (const x of xs) { switch (x) { case 1: if (flag) continue; return 1; default: return 2; } } return 3; }`,
+    expect: fires("statement-forms"),
+  },
+  {
+    name: "an assignment-driven fallthrough switch",
+    source:
+      `function f(x: number): number { let result = 0; switch (x) { case 1: result = 1; default: result = 2; } return result; }`,
+    expect: fires("statement-forms"),
+  },
+  {
+    name: "a returning default does not cover a non-returning case",
+    source:
+      `function f(x: number): number { switch (x) { case 1: use(x); default: return 2; } }`,
     expect: fires("statement-forms"),
   },
   {

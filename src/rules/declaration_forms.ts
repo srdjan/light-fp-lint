@@ -13,10 +13,10 @@ const isDestructuring = (
   node.type === "ObjectPattern" || node.type === "ArrayPattern";
 
 /**
- * `light-fp/declaration-forms`: domain code binds each name on its own and
- * declares each function with a `function` declaration. A destructuring pattern
- * hides which member feeds which name, and a function-valued `const` hides the
- * function from a reader who scans for declarations.
+ * `light-fp/declaration-forms`: domain code binds each name on its own. An arrow
+ * assigned to a `const` is an immutable function value. A destructuring pattern
+ * hides which member feeds which name. A function expression or a function
+ * assigned to a mutable binding remains refused.
  */
 export const declarationForms: Deno.lint.Rule = {
   create(context) {
@@ -61,6 +61,12 @@ export const declarationForms: Deno.lint.Rule = {
         const declaration = node.parent;
         if (declaration.type !== "VariableDeclaration") return;
         if (declaration.kind !== "const" && declaration.kind !== "let") return;
+        if (
+          declaration.kind === "const" &&
+          init.type === "ArrowFunctionExpression"
+        ) {
+          return;
+        }
         if (declaration.parent.type === "ExportNamedDeclaration") {
           context.report({
             node,

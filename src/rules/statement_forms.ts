@@ -1,5 +1,6 @@
 // @light-fp adapter -- a lint rule adapts Deno's visitor API: it reports through a
 // void callback and is driven by mutation it does not own.
+import { childValuesOf, isNode } from "../ast.ts";
 import { isDomain } from "../layer.ts";
 
 const MUTATING_METHODS: readonly string[] = [
@@ -38,11 +39,45 @@ const methodName = (node: Deno.lint.MemberExpression): string | undefined => {
     : undefined;
 };
 
+const containsJump = (value: unknown): boolean => {
+  if (Array.isArray(value)) return value.some(containsJump);
+  if (!isNode(value)) return false;
+  if (value.type === "BreakStatement" || value.type === "ContinueStatement") {
+    return true;
+  }
+  return childValuesOf(value).some(containsJump);
+};
+
+const alwaysReturns = (node: Deno.lint.Node): boolean => {
+  if (node.type === "ReturnStatement") return true;
+  if (node.type === "BlockStatement") {
+    const last = node.body.at(-1);
+    return last !== undefined && alwaysReturns(last);
+  }
+  if (node.type === "IfStatement") {
+    return node.alternate !== null && alwaysReturns(node.consequent) &&
+      alwaysReturns(node.alternate);
+  }
+  return false;
+};
+
+const isReturnTerminating = (node: Deno.lint.SwitchStatement): boolean => {
+  const finalCase = node.cases.at(-1);
+  if (finalCase === undefined || finalCase.consequent.length === 0) {
+    return false;
+  }
+  if (containsJump(node.cases)) return false;
+  return node.cases.every((switchCase) => {
+    const finalStatement = switchCase.consequent.at(-1);
+    return finalStatement === undefined || alwaysReturns(finalStatement);
+  });
+};
+
 /**
- * `light-fp/statement-forms`: domain code branches with `if` or a lookup and
- * iterates a finite collection with `for...of`. A `switch`, an unbounded loop,
- * a label, and a loop that changes its own collection each
- * hide the control flow from the reader.
+ * `light-fp/statement-forms`: domain code branches with `if`, a lookup, or a
+ * return-terminating `switch`, and iterates a finite collection with `for...of`.
+ * Fallthrough switches, unbounded loops, labels, and loops that change their
+ * own collection hide the control flow from the reader.
  */
 export const statementForms: Deno.lint.Rule = {
   create(context) {
@@ -98,10 +133,12 @@ export const statementForms: Deno.lint.Rule = {
       },
 
       SwitchStatement(node) {
+        if (isReturnTerminating(node)) return;
         context.report({
           node,
-          message: "A `switch` statement falls through and hides its branches.",
-          hint: "Use `match` from `ts-pattern`, or `if`/`else`.",
+          message: "A `switch` has fallthrough or a non-returning case.",
+          hint:
+            "End every case group with an unconditional return, or use `if`/`else`.",
         });
       },
 

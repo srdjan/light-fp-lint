@@ -73,62 +73,62 @@ check("type-forms", [
     source: `function f(): undefined { return undefined; }`,
     expect: silent,
   },
-  // Raw exported signatures: the keywords.
+  // Primitive annotations in exported signatures.
   {
-    name: "an exported function with a raw string parameter",
+    name: "an exported function may take a string",
     source:
       `type Out = { readonly a: number }; export function f(a: string): Out { return { a: a.length }; }`,
-    expect: fires("type-forms"),
+    expect: silent,
   },
   {
-    name: "a raw number return",
+    name: "an exported function may return a number",
     source: `export function f(): number { return 1; }`,
-    expect: fires("type-forms"),
+    expect: silent,
   },
   {
-    name: "a raw boolean return",
+    name: "an exported function may return a boolean",
     source: `export function f(): boolean { return true; }`,
-    expect: fires("type-forms"),
+    expect: silent,
   },
   {
-    name: "a raw object parameter",
+    name: "an exported function may take object",
     source: `export function f(a: object): undefined { return undefined; }`,
-    expect: fires("type-forms"),
+    expect: silent,
   },
   {
-    name: "a raw unknown parameter",
+    name: "an exported function may take unknown",
     source: `export function f(a: unknown): undefined { return undefined; }`,
-    expect: fires("type-forms"),
+    expect: silent,
   },
   {
-    name: "each raw annotation reports once",
+    name: "several primitive annotations are fine",
     source:
       `export function f(a: string, b: number): boolean { return a.length === b; }`,
-    expect: fires("type-forms", 3),
+    expect: silent,
   },
   // Arrays and unions.
   {
-    name: "an array of a raw type",
+    name: "an exported function may take an array of primitives",
     source: `export function f(a: string[]): undefined { return undefined; }`,
-    expect: fires("type-forms"),
+    expect: silent,
   },
   {
-    name: "a readonly array of a raw type",
+    name: "an exported function may take a readonly array of primitives",
     source:
       `export function f(a: readonly number[]): undefined { return undefined; }`,
-    expect: fires("type-forms"),
+    expect: silent,
   },
   {
-    name: "a union with a raw member reports once",
+    name: "an exported function may take a primitive union",
     source:
       `export function f(a: string | number | undefined): undefined { return a === undefined ? undefined : undefined; }`,
-    expect: fires("type-forms"),
+    expect: silent,
   },
   {
-    name: "a union of a reference and a raw type",
+    name: "a union of a reference and a primitive is fine",
     source:
       `type Request = { readonly id: number }; export function f(a: Request | string): undefined { return a === undefined ? undefined : undefined; }`,
-    expect: fires("type-forms"),
+    expect: silent,
   },
   {
     name: "a union of references and undefined is fine",
@@ -138,16 +138,16 @@ check("type-forms", [
   },
   // Parameter forms.
   {
-    name: "a raw rest parameter annotation",
+    name: "a primitive rest parameter is fine",
     source:
       `export function f(...rest: string[]): undefined { return rest.length === 0 ? undefined : undefined; }`,
-    expect: fires("type-forms"),
+    expect: silent,
   },
   {
-    name: "a raw default parameter annotation",
+    name: "a primitive default parameter is fine",
     source:
       `export function f(a: string = "x"): undefined { return a.length === 0 ? undefined : undefined; }`,
-    expect: fires("type-forms"),
+    expect: silent,
   },
   {
     name: "a destructuring parameter with an object type literal",
@@ -156,17 +156,17 @@ check("type-forms", [
     expect: silent,
   },
   {
-    name: "a raw annotation on an array pattern parameter",
+    name: "a primitive array pattern annotation is fine",
     source:
       `export function f([a]: string[]): undefined { return a.length === 0 ? undefined : undefined; }`,
-    expect: fires("type-forms"),
+    expect: silent,
   },
   // Return annotations.
   {
-    name: "Promise of a raw type unwraps one level",
+    name: "an exported Promise may contain a primitive",
     source:
       `export function f(): Promise<string> { return Promise.resolve("a"); }`,
-    expect: fires("type-forms"),
+    expect: silent,
   },
   {
     name: "Promise of a named alias is fine",
@@ -175,10 +175,10 @@ check("type-forms", [
     expect: silent,
   },
   {
-    name: "Promise of a raw union reports once",
+    name: "an exported Promise may contain a primitive union",
     source:
       `export function f(): Promise<string | undefined> { return Promise.resolve(undefined); }`,
-    expect: fires("type-forms"),
+    expect: silent,
   },
   {
     name: "a nested Promise unwraps one level only",
@@ -229,22 +229,22 @@ check("type-forms", [
     expect: silent,
   },
   {
-    name: "a function exported in a list",
+    name: "a listed export may use a primitive annotation",
     source:
       `function f(a: string): undefined { return a === undefined ? undefined : undefined; } export { f };`,
-    expect: fires("type-forms"),
+    expect: silent,
   },
   {
-    name: "a function exported under another name",
+    name: "a renamed export may use a primitive annotation",
     source:
       `function f(a: string): undefined { return a === undefined ? undefined : undefined; } export { f as g };`,
-    expect: fires("type-forms"),
+    expect: silent,
   },
   {
-    name: "a function exported twice reports once",
+    name: "a function listed twice may use a primitive annotation",
     source:
       `function f(a: string): undefined { return a === undefined ? undefined : undefined; } export { f }; export { f as g };`,
-    expect: fires("type-forms"),
+    expect: silent,
   },
   {
     name: "a listed export of a non-function name is fine",
@@ -257,15 +257,15 @@ check("type-forms", [
     expect: silent,
   },
   {
-    name: "an exported overload declaration is checked",
+    name: "an exported overload may use a primitive annotation",
     source: `export declare function f(a: string): undefined;`,
-    expect: fires("type-forms"),
+    expect: silent,
   },
   {
-    name: "an overload list reports each raw annotation",
+    name: "an overload list may use primitive annotations",
     source:
       `export function f(a: string): undefined; export function f(a: number): undefined; export function f(a: string | number): undefined { return a === undefined ? undefined : undefined; }`,
-    expect: fires("type-forms", 3),
+    expect: silent,
   },
   // Layers.
   {
@@ -288,10 +288,8 @@ const messagesOf = (source: string): readonly string[] =>
     .filter((d) => d.id === "light-fp/type-forms")
     .map((d) => d.message);
 
-Deno.test("type-forms: a raw return gets the exported-signature message", () => {
-  assertEquals(messagesOf(`export function f(): number { return 1; }`), [
-    "The exported signature exposes a raw built-in type.",
-  ]);
+Deno.test("type-forms: a primitive export has no diagnostic", () => {
+  assertEquals(messagesOf(`export function f(): number { return 1; }`), []);
 });
 
 Deno.test("type-forms: ReadonlyArray gets its own message", () => {
