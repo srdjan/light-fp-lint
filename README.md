@@ -449,9 +449,11 @@ The `for...of` check covers a mutating method call (`push`, `pop`, `shift`,
 `unshift`, `splice`, `sort`, `reverse`, `fill`, `copyWithin`, `set`, `add`,
 `delete`, `clear`), a write to a member (`xs[i] = v`, `xs.length = 0`,
 `xs[i]++`), and `delete xs[i]`. It applies when the iterable is an identifier or
-a chain of member reads such as `state.items`, and it compares source text. A
-`const` alias of a read chain counts as that chain, so `const ys = xs` followed
-by `ys.push(x)` in a loop over `xs` is refused. A `let` binding, a copy such as
+a chain of member reads such as `state.items`. It compares the binding that
+declares the root name and the member reads after it, so an inner parameter that
+reuses the name of the iterated collection is a different collection. A `const`
+alias of a read chain counts as that chain, so `const ys = xs` followed by
+`ys.push(x)` in a loop over `xs` is refused. A `let` binding, a copy such as
 `[...xs]`, and a shadowing parameter are not aliases.
 
 Empty statements belong to `no-empty-statement`, which runs in every layer.

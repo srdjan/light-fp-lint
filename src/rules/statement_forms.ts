@@ -138,19 +138,30 @@ const bindingIn = (scope: SyntaxNode, name: string): Binding | undefined => {
   return undefined;
 };
 
-/** The read chain that the nearest binding of `name` above `node` aliases, when that binding is a `const` alias. */
-const aliasOf = (
+/** The nearest binding of `name` above `node`, with the scope that declares it. The result is undefined for a free name. */
+const bindingOf = (
   node: SyntaxNode,
   name: string,
-): Deno.lint.Node | undefined => {
+): (Binding & { readonly scope: SyntaxNode }) | undefined => {
   if (
     node.type === "Program" || node.type === "Line" || node.type === "Block"
   ) {
     return undefined;
   }
   const binding = bindingIn(node.parent, name);
-  return binding === undefined ? aliasOf(node.parent, name) : binding.alias;
+  return binding === undefined
+    ? bindingOf(node.parent, name)
+    : { ...binding, scope: node.parent };
 };
+
+/**
+ * A read chain after `const` aliases are followed: the scope that declares
+ * its root, undefined for a free name, and the chain text from that root.
+ */
+type Place = { readonly scope: SyntaxNode | undefined; readonly text: string };
+
+const samePlace = (a: Place | undefined, b: Place): boolean =>
+  a !== undefined && a.scope === b.scope && a.text === b.text;
 
 /** Alias hops followed before the rule stops, so a cycle of names ends. */
 const MAX_ALIAS_HOPS = 8;
@@ -212,23 +223,29 @@ export const statementForms: Deno.lint.Rule = {
     const textOf = (node: Deno.lint.Node): string =>
       context.sourceCode.getText(node);
 
-    /** The text of a read chain, with a `const` alias at its root replaced by the chain that the alias names. */
-    const canonicalText = (node: Deno.lint.Node, hops: number): string => {
-      const text = textOf(node);
+    /** The place that a read chain names. The result is undefined for any other expression and past the hop limit. */
+    const placeOf = (
+      node: Deno.lint.Node,
+      hops: number,
+    ): Place | undefined => {
       const root = rootOf(node);
       if (hops === 0 || !isReadChain(node) || root.type !== "Identifier") {
-        return text;
+        return undefined;
       }
-      const alias = aliasOf(root, root.name);
-      return alias === undefined
-        ? text
-        : canonicalText(alias, hops - 1) + text.slice(textOf(root).length);
+      const text = textOf(node);
+      const binding = bindingOf(root, root.name);
+      if (binding?.alias === undefined) return { scope: binding?.scope, text };
+      const aliased = placeOf(binding.alias, hops - 1);
+      return aliased === undefined ? undefined : {
+        scope: aliased.scope,
+        text: aliased.text + text.slice(textOf(root).length),
+      };
     };
 
-    /** True when `node` sits in the body of a `for...of` over a read chain whose canonical text is `text`. */
+    /** True when `node` sits in the body of a `for...of` over `place`. */
     const isInLoopOver = (
       node: Deno.lint.Node | Deno.lint.TSParameterProperty,
-      text: string,
+      place: Place,
     ): boolean => {
       if (
         node.type === "Program" || node.type === "Line" ||
@@ -239,19 +256,19 @@ export const statementForms: Deno.lint.Rule = {
       const parent = node.parent;
       if (
         parent.type === "ForOfStatement" && parent.body === node &&
-        isReadChain(parent.right) &&
-        canonicalText(parent.right, MAX_ALIAS_HOPS) === text
+        samePlace(placeOf(parent.right, MAX_ALIAS_HOPS), place)
       ) {
         return true;
       }
-      return isInLoopOver(parent, text);
+      return isInLoopOver(parent, place);
     };
 
     const reportLive = (
       node: Deno.lint.Node,
       target: Deno.lint.Node,
     ): void => {
-      if (!isInLoopOver(node, canonicalText(target, MAX_ALIAS_HOPS))) return;
+      const place = placeOf(target, MAX_ALIAS_HOPS);
+      if (place === undefined || !isInLoopOver(node, place)) return;
       context.report({ node, message: LIVE_MESSAGE, hint: LIVE_HINT });
     };
 

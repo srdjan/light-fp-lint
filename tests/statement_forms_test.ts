@@ -273,6 +273,24 @@ check("statement-forms", [
     expect: fires("statement-forms"),
   },
   {
+    name: "an alias of an inner parameter that has the iterated name",
+    source:
+      `function f(xs: number[]): readonly number[] { for (const x of xs) { const change = (xs: number[]): readonly number[] => { const ys = xs; ys[0] = x; return ys; }; return change([]); } return []; }`,
+    expect: silent,
+  },
+  {
+    name: "a write to an inner parameter that has the iterated name",
+    source:
+      `function f(xs: number[]): readonly number[] { for (const x of xs) { const change = (xs: number[]): readonly number[] => { xs[0] = x; return xs; }; return change([]); } return []; }`,
+    expect: silent,
+  },
+  {
+    name: "a write through an outer const alias captured by a closure",
+    source:
+      `function f(xs: number[]): void { const ys = xs; for (const x of xs) { const change = (): void => { ys[0] = x; }; change(); } }`,
+    expect: fires("statement-forms"),
+  },
+  {
     name: "a declaration in a class static block shadows an outer const alias",
     source:
       `function f(xs: number[], other: number[]): void { const ys = xs; for (const x of xs) { run(class { static { const ys = other; ys.push(x); } }); } }`,
