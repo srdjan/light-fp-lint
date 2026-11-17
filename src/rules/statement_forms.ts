@@ -1,6 +1,11 @@
 // @light-fp adapter -- a lint rule adapts Deno's visitor API: it reports through a
 // void callback and is driven by mutation it does not own.
-import { childValuesOf, isNode, type SyntaxNode } from "../ast.ts";
+import {
+  childValuesOf,
+  isNode,
+  patternNames,
+  type SyntaxNode,
+} from "../ast.ts";
 import { isDomain } from "../layer.ts";
 
 const MUTATING_METHODS: readonly string[] = [
@@ -33,16 +38,20 @@ const isReadChain = (node: Deno.lint.Node): boolean =>
 const rootOf = (node: Deno.lint.Node): Deno.lint.Node =>
   node.type === "MemberExpression" ? rootOf(node.object) : node;
 
-/** True when `value` holds an identifier named `name`, in a pattern or anywhere below it. */
-const mentions = (value: unknown, name: string): boolean => {
-  if (Array.isArray(value)) return value.some((item) => mentions(item, name));
-  if (!isNode(value)) return false;
-  if (value.type === "Identifier") return value.name === name;
-  return childValuesOf(value).some((child) => mentions(child, name));
-};
+/** True when one of the binding patterns `patterns` declares `name`. */
+const binds = (
+  patterns: readonly (SyntaxNode | null)[],
+  name: string,
+): boolean => patterns.some((pattern) => patternNames(pattern).includes(name));
 
-/** The statements of a block or program, with each exported declaration unwrapped. */
+/**
+ * The statements of a scope, with each exported declaration unwrapped. A
+ * switch body is one scope, so a case sees the declarations of every case.
+ */
 const statementsOf = (node: SyntaxNode): readonly Deno.lint.Node[] => {
+  if (node.type === "SwitchCase") {
+    return node.parent.cases.flatMap((switchCase) => switchCase.consequent);
+  }
   if (node.type !== "BlockStatement" && node.type !== "Program") return [];
   return node.body.map((statement) =>
     statement.type === "ExportNamedDeclaration" && statement.declaration
@@ -71,10 +80,10 @@ const isFunction = (
 const bindingIn = (scope: SyntaxNode, name: string): Binding | undefined => {
   const other: Binding = { alias: undefined };
   if (isFunction(scope)) {
-    return mentions(scope.params, name) ? other : undefined;
+    return binds(scope.params, name) ? other : undefined;
   }
   if (scope.type === "CatchClause") {
-    return mentions(scope.param, name) ? other : undefined;
+    return binds([scope.param], name) ? other : undefined;
   }
   const head =
     scope.type === "ForOfStatement" || scope.type === "ForInStatement"
@@ -83,7 +92,9 @@ const bindingIn = (scope: SyntaxNode, name: string): Binding | undefined => {
       ? scope.init
       : null;
   if (head?.type === "VariableDeclaration") {
-    return mentions(head.declarations, name) ? other : undefined;
+    return binds(head.declarations.map((declarator) => declarator.id), name)
+      ? other
+      : undefined;
   }
   for (const statement of statementsOf(scope)) {
     if (statement.type === "VariableDeclaration") {
@@ -97,17 +108,17 @@ const bindingIn = (scope: SyntaxNode, name: string): Binding | undefined => {
             ? { alias: init }
             : other;
         }
-        if (mentions(declarator.id, name)) return other;
+        if (binds([declarator.id], name)) return other;
       }
     }
     if (
       (statement.type === "FunctionDeclaration" ||
         statement.type === "ClassDeclaration" ||
         statement.type === "ImportDeclaration") &&
-      mentions(
+      binds(
         statement.type === "ImportDeclaration"
-          ? statement.specifiers
-          : statement.id,
+          ? statement.specifiers.map((specifier) => specifier.local)
+          : [statement.id],
         name,
       )
     ) {

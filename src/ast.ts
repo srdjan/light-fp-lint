@@ -37,6 +37,27 @@ export const isNode = (value: unknown): value is SyntaxNode =>
   typeof value.type === "string";
 
 /**
+ * The names that a binding pattern declares. A default value, a property key,
+ * and a type annotation declare no name.
+ */
+export const patternNames = (node: SyntaxNode | null): readonly string[] => {
+  if (!node) return [];
+  if (node.type === "Identifier") return [node.name];
+  if (node.type === "AssignmentPattern") return patternNames(node.left);
+  if (node.type === "RestElement") return patternNames(node.argument);
+  if (node.type === "ArrayPattern") {
+    return node.elements.flatMap((element) => patternNames(element));
+  }
+  if (node.type === "ObjectPattern") {
+    return node.properties.flatMap((property) =>
+      patternNames(property.type === "Property" ? property.value : property)
+    );
+  }
+  if (node.type === "TSParameterProperty") return patternNames(node.parameter);
+  return [];
+};
+
+/**
  * The names a file binds itself: imports, variable declarators, function and
  * class names, parameters, catch parameters, and enum, namespace, and import
  * alias names. A global name that appears here is shadowed, not ambient.
@@ -46,30 +67,7 @@ export const localBindings = (ast: Deno.lint.Program): ReadonlySet<string> => {
   const visited = new Set<SyntaxNode>();
 
   const addPattern = (node: SyntaxNode | null): void => {
-    if (!node) return;
-    if (node.type === "Identifier") {
-      names.add(node.name);
-      return;
-    }
-    if (node.type === "AssignmentPattern") {
-      addPattern(node.left);
-      return;
-    }
-    if (node.type === "RestElement") {
-      addPattern(node.argument);
-      return;
-    }
-    if (node.type === "ArrayPattern") {
-      for (const element of node.elements) addPattern(element);
-      return;
-    }
-    if (node.type === "ObjectPattern") {
-      for (const property of node.properties) {
-        addPattern(property.type === "Property" ? property.value : property);
-      }
-      return;
-    }
-    if (node.type === "TSParameterProperty") addPattern(node.parameter);
+    for (const name of patternNames(node)) names.add(name);
   };
 
   const visit = (value: unknown): void => {

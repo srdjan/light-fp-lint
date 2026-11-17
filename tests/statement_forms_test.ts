@@ -249,6 +249,30 @@ check("statement-forms", [
     expect: silent,
   },
   {
+    name: "a parameter default that reads an alias does not shadow it",
+    source:
+      `function f(xs: number[]): void { const ys = xs; for (const x of ys) { ((unused: number[] = ys): number => ys.push(x))(ys); } }`,
+    expect: fires("statement-forms"),
+  },
+  {
+    name: "a declaration in a switch case shadows an outer const alias",
+    source:
+      `function f(xs: number[], other: number[]): void { const ys = xs; for (const x of xs) { switch (x) { default: const ys = other; ys.push(x); return; } } }`,
+    expect: silent,
+  },
+  {
+    name: "a destructuring default that reads an alias does not shadow it",
+    source:
+      `function f(xs: number[], o: { a?: number[] }): void { const ys = xs; for (const x of xs) { const { a = ys } = o; ys.push(a.length); } }`,
+    expect: fires("statement-forms"),
+  },
+  {
+    name: "a declaration in a switch case does not shadow the discriminant",
+    source:
+      `function f(xs: number[], other: number[]): void { const ys = xs; for (const x of xs) { switch (ys.push(x)) { default: const ys = other; run(ys); return; } } }`,
+    expect: fires("statement-forms"),
+  },
+  {
     name: "a mutation of another collection is fine",
     source:
       `function f(xs: number[], ys: number[]): void { for (const x of xs) { ys.push(x); } }`,
