@@ -1,5 +1,6 @@
 // @light-fp adapter -- a lint rule adapts Deno's visitor API: it reports through a
 // void callback and is driven by mutation it does not own.
+import { childValuesOf, isNode, type SyntaxNode } from "../ast.ts";
 import { layerOf } from "../layer.ts";
 
 const FUNCTION_SCOPES = new Set([
@@ -9,11 +10,141 @@ const FUNCTION_SCOPES = new Set([
   "MethodDefinition",
 ]);
 
-const isAllowedStatementExpression = (node: Deno.lint.Node): boolean =>
+type UnitDeclaration = Readonly<{
+  declaration: Deno.lint.FunctionDeclaration;
+  owner: Deno.lint.BlockStatement;
+}>;
+
+const occurrenceName = (node: SyntaxNode): string | undefined => {
+  const nodeType: string = node.type;
+  if (nodeType !== "Identifier" && nodeType !== "JSXIdentifier") {
+    return undefined;
+  }
+  return "name" in node && typeof node.name === "string"
+    ? node.name
+    : undefined;
+};
+
+const functionBodyOwner = (
+  node: Deno.lint.FunctionDeclaration,
+  sourceCode: Deno.lint.SourceCode,
+): Deno.lint.BlockStatement | undefined => {
+  const ancestors = sourceCode.getAncestors(node);
+  const block = ancestors.at(-1);
+  const owner = ancestors.at(-2);
+  if (block?.type !== "BlockStatement" || owner === undefined) return undefined;
+  if (
+    owner.type !== "FunctionDeclaration" &&
+    owner.type !== "FunctionExpression" &&
+    owner.type !== "ArrowFunctionExpression"
+  ) {
+    return undefined;
+  }
+  return owner.body === block ? block : undefined;
+};
+
+const unitDeclaration = (
+  node: Deno.lint.FunctionDeclaration,
+  sourceCode: Deno.lint.SourceCode,
+): UnitDeclaration | undefined => {
+  const body: Deno.lint.BlockStatement | null | undefined = node.body;
+  if (
+    body === null || body === undefined || node.declare || node.async ||
+    node.generator || node.id === null
+  ) {
+    return undefined;
+  }
+  if (node.returnType?.typeAnnotation.type !== "TSUndefinedKeyword") {
+    return undefined;
+  }
+  const owner = functionBodyOwner(node, sourceCode);
+  return owner === undefined ? undefined : { declaration: node, owner };
+};
+
+const directUnitCall = (
+  occurrence: SyntaxNode,
+  owner: Deno.lint.BlockStatement,
+  sourceCode: Deno.lint.SourceCode,
+): Deno.lint.CallExpression | undefined => {
+  if (occurrence.type !== "Identifier") return undefined;
+  const call = occurrence.parent;
+  if (
+    call.type !== "CallExpression" || call.callee !== occurrence ||
+    call.optional
+  ) {
+    return undefined;
+  }
+  return sourceCode.getAncestors(occurrence).includes(owner) ? call : undefined;
+};
+
+const allowedUnitCalls = (
+  ast: Deno.lint.Program,
+  sourceCode: Deno.lint.SourceCode,
+): ReadonlySet<Deno.lint.CallExpression> => {
+  const declarations: UnitDeclaration[] = [];
+  const occurrences = new Map<string, SyntaxNode[]>();
+  const visited = new Set<SyntaxNode>();
+  let hasDynamicScope = false;
+
+  const visit = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item);
+      return;
+    }
+    if (!isNode(value) || visited.has(value)) return;
+    visited.add(value);
+
+    const nodeType: string = value.type;
+    const name = occurrenceName(value);
+    if (name !== undefined) {
+      const named = occurrences.get(name) ?? [];
+      named.push(value);
+      occurrences.set(name, named);
+      if (name === "eval") hasDynamicScope = true;
+    }
+    if (nodeType === "WithStatement") hasDynamicScope = true;
+    if (value.type === "FunctionDeclaration") {
+      const candidate = unitDeclaration(value, sourceCode);
+      if (candidate !== undefined) declarations.push(candidate);
+    }
+
+    for (const child of childValuesOf(value)) visit(child);
+  };
+
+  visit(ast);
+  if (hasDynamicScope) return new Set();
+
+  const allowed = new Set<Deno.lint.CallExpression>();
+  for (const candidate of declarations) {
+    const id = candidate.declaration.id;
+    if (id === null) continue;
+    const calls: Deno.lint.CallExpression[] = [];
+    let valid = true;
+    for (const occurrence of occurrences.get(id.name) ?? []) {
+      if (occurrence === id) continue;
+      const call = directUnitCall(occurrence, candidate.owner, sourceCode);
+      if (call === undefined) {
+        valid = false;
+        break;
+      }
+      calls.push(call);
+    }
+    if (valid) {
+      for (const call of calls) allowed.add(call);
+    }
+  }
+  return allowed;
+};
+
+const isAllowedStatementExpression = (
+  node: Deno.lint.Node,
+  unitCalls: ReadonlySet<Deno.lint.CallExpression>,
+): boolean =>
   node.type === "AssignmentExpression" ||
   node.type === "UpdateExpression" ||
   node.type === "YieldExpression" ||
-  (node.type === "CallExpression" && node.callee.type === "Super");
+  (node.type === "CallExpression" &&
+    (node.callee.type === "Super" || unitCalls.has(node)));
 
 const isDirective = (
   node: Deno.lint.ExpressionStatement,
@@ -38,13 +169,19 @@ const isDirective = (
  * The unhandled-Result rule, made decidable by asking a syntactic question.
  *
  * "Is this a Result?" needs type information the linter does not have. "Is a
- * value being thrown away?" is pure syntax. Inside a pure function the two
- * coincide: a discarded call result is either dead code or a hidden effect, so
- * the same rule also catches floating promises and fire-and-forget effects.
+ * value being thrown away?" is pure syntax. One narrow exception is decidable
+ * from checked source: a concrete nested function that explicitly returns
+ * `undefined` promises no meaningful result. This says nothing about its
+ * effects, termination, or ownership of values it mutates.
  */
 export const noDiscardedValues: Deno.lint.Rule = {
   create(context) {
     if (layerOf(context.filename, context.sourceCode) === "adapter") return {};
+
+    const unitCalls = allowedUnitCalls(
+      context.sourceCode.ast,
+      context.sourceCode,
+    );
 
     return {
       ExpressionStatement(node) {
@@ -72,10 +209,10 @@ export const noDiscardedValues: Deno.lint.Rule = {
         }
 
         // Assignments and updates exist for their state transition. A directive
-        // prologue is metadata, yield advances a generator, and super() is a
-        // required constructor transition. Every other expression makes a value
-        // and then silently loses it.
-        if (isAllowedStatementExpression(expression)) return;
+        // prologue is metadata, yield advances a generator, super() is required,
+        // and a proven unit call has no meaningful result. Every other expression
+        // makes a value and then silently loses it.
+        if (isAllowedStatementExpression(expression, unitCalls)) return;
         if (isDirective(node, ancestors)) return;
 
         context.report({

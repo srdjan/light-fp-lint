@@ -223,6 +223,430 @@ for (
   });
 }
 
+Deno.test("no-discarded-values: admit-capabilities shape retains only native push", () => {
+  const source = `type Expr =
+  | { kind: "StringLit"; value: string }
+  | { kind: "Var"; name: string }
+  | { kind: "Get"; field: string; target: Expr }
+  | { kind: "Binary"; op: string; left: Expr; right: Expr }
+  | { kind: "Unary"; expr: Expr };
+function collect(expr: Expr): readonly string[] {
+  const caps: string[] = [];
+  function walk(e: Expr): undefined {
+    if (e.kind === "Binary" && e.op === "in") {
+      if (
+        e.left.kind === "StringLit" &&
+        e.right.kind === "Get" &&
+        e.right.field === "capabilities" &&
+        e.right.target.kind === "Var" &&
+        e.right.target.name === "actor"
+      ) {
+        caps.push(e.left.value);
+      }
+    }
+    if (e.kind === "Binary") {
+      walk(e.left);
+      walk(e.right);
+    }
+    if (e.kind === "Unary") {
+      walk(e.expr);
+    }
+  }
+  walk(expr);
+  return caps;
+}`;
+  const found = diagnostics(source).filter((diagnostic) =>
+    diagnostic.id === "light-fp/no-discarded-values"
+  );
+  assertEquals(
+    found.map((diagnostic) => ({
+      text: source.slice(diagnostic.range[0], diagnostic.range[1]),
+      message: diagnostic.message,
+    })),
+    [{
+      text: "caps.push(e.left.value);",
+      message: "The value this expression produces is discarded.",
+    }],
+  );
+});
+
+Deno.test("no-discarded-values: nested explicit-undefined helpers have no result to discard", () => {
+  for (
+    const source of [
+      `function outer(): undefined {
+  function unit(): undefined { return undefined; }
+  unit();
+  return undefined;
+}`,
+      `function outer(): undefined {
+  unit();
+  function unit(): undefined { return undefined; }
+  return undefined;
+}`,
+    ]
+  ) {
+    assertRuleCount("light-fp/no-discarded-values", source, 0);
+  }
+});
+
+Deno.test("no-discarded-values: an undefined contract is not a purity or ownership claim", () => {
+  assertRuleCount(
+    "light-fp/no-discarded-values",
+    `type Borrowed = { value: number };
+function outer(input: Borrowed): undefined {
+  function mutateBorrowed(): undefined {
+    input.value = 1;
+    return undefined;
+  }
+  mutateBorrowed();
+  return undefined;
+}`,
+    0,
+  );
+});
+
+for (
+  const testCase of [
+    {
+      name: "a module-level undefined helper",
+      source: `function unit(): undefined { return undefined; }
+function outer(): undefined { unit(); return undefined; }`,
+      expected: 1,
+    },
+    {
+      name: "a bodyless declared helper",
+      source: `function outer(): undefined {
+  declare function unit(): undefined;
+  unit();
+  return undefined;
+}`,
+      expected: 1,
+    },
+    {
+      name: "an ambient declared helper with a body",
+      source: `function outer(): undefined {
+  declare function unit(): undefined { return undefined; }
+  unit();
+  return undefined;
+}`,
+      expected: 1,
+    },
+    {
+      name: "an undefined helper in an arbitrary nested block",
+      source: `function outer(flag: boolean): undefined {
+  if (flag) { function unit(): undefined { return undefined; } unit(); }
+  return undefined;
+}`,
+      expected: 1,
+    },
+    {
+      name: "an inferred undefined return",
+      source: `function outer(): undefined {
+  function unit() { return undefined; }
+  unit();
+  return undefined;
+}`,
+      expected: 1,
+    },
+    {
+      name: "a void return",
+      source: `function outer(): undefined {
+  function unit(): void { return undefined; }
+  unit();
+  return undefined;
+}`,
+      expected: 1,
+    },
+    {
+      name: "an alias of undefined",
+      source: `type Unit = undefined;
+function outer(): undefined {
+  function unit(): Unit { return undefined; }
+  unit();
+  return undefined;
+}`,
+      expected: 1,
+    },
+    {
+      name: "an async undefined result",
+      source: `async function outer(): Promise<undefined> {
+  async function unit(): Promise<undefined> { return undefined; }
+  unit();
+  return undefined;
+}`,
+      expected: 1,
+    },
+    {
+      name: "a generator declaration",
+      source: `function outer(): undefined {
+  function* unit(): undefined { return undefined; }
+  unit();
+  return undefined;
+}`,
+      expected: 1,
+    },
+    {
+      name: "a const arrow including its temporal dead zone",
+      source: `function outer(): undefined {
+  unit();
+  const unit = (): undefined => undefined;
+  return undefined;
+}`,
+      expected: 1,
+    },
+    {
+      name: "an imported helper",
+      source: `import { unit } from "../ports/unit.ts";
+function outer(): undefined { unit(); return undefined; }`,
+      expected: 1,
+    },
+    {
+      name: "a member call",
+      source: `type Port = { readonly unit: () => undefined };
+function outer(port: Port): undefined { port.unit(); return undefined; }`,
+      expected: 1,
+    },
+    {
+      name: "an optional call",
+      source: `function outer(): undefined {
+  function unit(): undefined { return undefined; }
+  unit?.();
+  return undefined;
+}`,
+      expected: 1,
+    },
+    {
+      name: "an awaited call",
+      source: `async function outer(): Promise<undefined> {
+  function unit(): undefined { return undefined; }
+  await unit();
+  return undefined;
+}`,
+      expected: 1,
+    },
+    {
+      name: "a void-wrapped call",
+      source: `function outer(): undefined {
+  function unit(): undefined { return undefined; }
+  void unit();
+  return undefined;
+}`,
+      expected: 1,
+    },
+    {
+      name: "a logical wrapper",
+      source: `function outer(ready: boolean): undefined {
+  function unit(): undefined { return undefined; }
+  ready && unit();
+  return undefined;
+}`,
+      expected: 1,
+    },
+    {
+      name: "an aliased helper",
+      source: `function outer(): undefined {
+  function unit(): undefined { return undefined; }
+  const alias = unit;
+  unit();
+  return undefined;
+}`,
+      expected: 1,
+    },
+    {
+      name: "a helper passed as a value",
+      source: `type Consumer = (run: () => undefined) => undefined;
+function outer(consume: Consumer): undefined {
+  function unit(): undefined { return undefined; }
+  const consumed = consume(unit);
+  unit();
+  return consumed;
+}`,
+      expected: 1,
+    },
+    {
+      name: "a parameter with the same name",
+      source: `function outer(): undefined {
+  function unit(): undefined { return undefined; }
+  function sibling(unit: () => undefined): undefined { return undefined; }
+  unit();
+  return sibling(unit);
+}`,
+      expected: 1,
+    },
+    {
+      name: "a catch binding with the same name",
+      source: `function outer(): undefined {
+  function unit(): undefined { return undefined; }
+  try {} catch (unit) {}
+  unit();
+  return undefined;
+}`,
+      expected: 1,
+    },
+    {
+      name: "a destructured shadow binding",
+      source: `type Source = { readonly unit: () => undefined };
+function outer(flag: boolean, source: Source): undefined {
+  function unit(): undefined { return undefined; }
+  if (flag) { const { unit } = source; }
+  unit();
+  return undefined;
+}`,
+      expected: 1,
+    },
+    {
+      name: "an overload with the same name",
+      source: `function outer(): undefined {
+  function unit(): undefined;
+  function unit(): undefined { return undefined; }
+  unit();
+  return undefined;
+}`,
+      expected: 1,
+    },
+    {
+      name: "a direct rebinding",
+      source: `type Run = () => undefined;
+function outer(replacement: Run): undefined {
+  function unit(): undefined { return undefined; }
+  unit = replacement;
+  unit();
+  return undefined;
+}`,
+      expected: 1,
+    },
+    {
+      name: "a destructured rebinding",
+      source: `type Source = { readonly unit: () => undefined };
+function outer(source: Source): undefined {
+  function unit(): undefined { return undefined; }
+  ({ unit } = source);
+  unit();
+  return undefined;
+}`,
+      expected: 1,
+    },
+    {
+      name: "a for-of target rebinding",
+      source: `type Run = () => undefined;
+function outer(replacements: readonly Run[]): undefined {
+  function unit(): undefined { return undefined; }
+  for (unit of replacements) {}
+  unit();
+  return undefined;
+}`,
+      expected: 1,
+    },
+    {
+      name: "a call outside the declaring function body",
+      source: `function first(): undefined {
+  function unit(): undefined { return undefined; }
+  unit();
+  return undefined;
+}
+function second(): undefined { unit(); return undefined; }`,
+      expected: 2,
+    },
+    {
+      name: "a default-parameter call outside the owner block",
+      source: `function outer(value = unit()): undefined {
+  function unit(): undefined { return undefined; }
+  unit();
+  return value;
+}`,
+      expected: 1,
+    },
+    {
+      name: "a JSX value reference",
+      source: `function outer(): undefined {
+  function Unit(): undefined { return undefined; }
+  const view = <Unit />;
+  Unit();
+  return undefined;
+}`,
+      expected: 1,
+      filename: "/repo/src/domain/effects_purity.tsx",
+    },
+    {
+      name: "a direct eval identifier",
+      source: `function outer(): undefined {
+  function unit(): undefined { return undefined; }
+  const changed = eval("unit = () => 7");
+  unit();
+  return changed;
+}`,
+      expected: 1,
+    },
+    {
+      name: "a wrapped eval identifier",
+      source: `function outer(): undefined {
+  function unit(): undefined { return undefined; }
+  const changed = (0, eval)("unit = () => 7");
+  unit();
+  return changed;
+}`,
+      expected: 1,
+    },
+    {
+      name: "a with statement",
+      source: `function outer(scope: object): undefined {
+  function unit(): undefined { return undefined; }
+  with (scope) { const value = 1; }
+  unit();
+  return undefined;
+}`,
+      expected: 1,
+    },
+  ] as const
+) {
+  Deno.test(`no-discarded-values: ${testCase.name} stays diagnosed`, () => {
+    assertRuleCount(
+      "light-fp/no-discarded-values",
+      testCase.source,
+      testCase.expected,
+      "filename" in testCase ? testCase.filename : DOMAIN,
+    );
+  });
+}
+
+for (
+  const testCase of [
+    ["number", `function unit(): number { return 1; }`],
+    ["unknown", `function unit(): unknown { return undefined; }`],
+    [
+      "Promise",
+      `function unit(): Promise<undefined> { return Promise.resolve(undefined); }`,
+    ],
+    [
+      "Result",
+      `type Result = { readonly ok: boolean }; function unit(): Result { return { ok: true }; }`,
+    ],
+  ] as const
+) {
+  Deno.test(`no-discarded-values: an ignored ${testCase[0]} remains diagnosed`, () => {
+    assertRuleCount(
+      "light-fp/no-discarded-values",
+      `function outer(): undefined { ${
+        testCase[1]
+      } unit(); return undefined; }`,
+      1,
+    );
+  });
+}
+
+Deno.test("no-discarded-values: native and custom push calls remain diagnosed", () => {
+  for (
+    const source of [
+      `function outer(values: number[]): undefined { values.push(1); return undefined; }`,
+      `type Result = { readonly ok: boolean };
+type Custom = { readonly push: () => Result };
+function outer(target: Custom): undefined { target.push(); return undefined; }`,
+    ]
+  ) {
+    assertRuleCount("light-fp/no-discarded-values", source, 1);
+  }
+});
+
 Deno.test("no-discarded-values: super() is required constructor work", () => {
   assertRuleCount(
     "light-fp/no-discarded-values",

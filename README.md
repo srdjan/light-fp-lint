@@ -234,13 +234,14 @@ if (!valid) return err({ _tag: "Invalid", reason: reason }); // fine
 ### `light-fp/no-discarded-values`
 
 Every expression statement inside a function must be a state transition such as
-an assignment, update, or generator `yield`. Values produced by calls,
-construction, logical and conditional expressions, optional chains, sequences,
-and tagged templates cannot be silently discarded. This is the
+an assignment, update, or generator `yield`, or a direct call to a nested helper
+whose declared return type is exactly `undefined`. Values produced by other
+calls, construction, logical and conditional expressions, optional chains,
+sequences, and tagged templates cannot be silently discarded. This is the
 unhandled-`Result` check. Asking "is this a `Result`?" needs type information
-the linter does not have; asking "is a value being thrown away?" does not, and
-inside a pure function the two are the same question. It catches ignored
-`Result` values, floating promises, and fire-and-forget effects at once.
+the linter does not have; asking "is a value being thrown away?" does not. It
+catches ignored `Result` values, floating promises, and fire-and-forget effects
+at once.
 
 ```ts
 validateUser(input); // reported
@@ -249,10 +250,15 @@ const checked = validateUser(input); // fine
 ```
 
 Assignments, updates, generator `yield`, directive prologues, and a required
-`super()` call are transitions and are not reported. Other expression
-statements, including literals and binary expressions, produce a value and then
-discard it. A local accumulator inside a pure function is allowed, and readonly
-annotations at data boundaries are `readonly-data`'s job.
+`super()` call are transitions and are not reported. The nested-helper allowance
+is deliberately narrow: the helper is a concrete synchronous function inside an
+actual function body; apart from its declaration identifier, every same-named
+occurrence is one of its direct calls. `eval` or `with` disables the allowance
+for the file. `void`, aliases of `undefined`, async functions, wrappers, member
+calls, and native mutation such as `values.push(x)` remain reported. An
+`undefined` return contract says only that no meaningful result was discarded;
+the helper can still mutate borrowed input, so the rule does not call it pure or
+locally owned.
 
 ### `light-fp/readonly-data`
 
@@ -387,10 +393,19 @@ mutable binding remains refused.
 
 | Refused form                                                            | Write instead                                     | ZTS code |
 | ----------------------------------------------------------------------- | ------------------------------------------------- | -------- |
-| `const { a } = x`, `const [a] = x`, including `for...of` and `for...in` | Bind the value to one name, then read each member | ZTS001   |
+| Object destructuring, such as `const { a } = x`                         | Bind the value, then read each named member       | ZTS001   |
+| Array destructuring outside the narrow local `const [a, b] = pair` form | Bind the value, then read each indexed member     | ZTS001   |
 | A destructuring parameter, such as `function f({ a }: T)`               | Accept one named parameter, then read each member | ZTS001   |
 | `const f = function ...`                                                | `const f = (...) => ...`                          | ZTS608   |
 | `let f = () => ...`, `let f = function ...`                             | A `const` arrow or function declaration           | ZTS608   |
+
+Inside an actual function body, a nonempty `const` array pattern is allowed when
+every element is a plain identifier. The same flat pattern is allowed in a
+synchronous `for...of` head. Top-level patterns, `let`, `var`, holes, defaults,
+rest or nested patterns, parameters, `for...in`, `for await...of`, and class
+static blocks remain refused. This allowance preserves the source iterator's
+`next` and `return` behavior; it does not claim that direct slot reads are
+equivalent.
 
 ### `light-fp/function-forms`
 
@@ -719,9 +734,13 @@ These limits are measured against the current implementation:
   every `new` in a domain file. In a prelude file, `pure-module` reports
   construction at module scope, and construction inside a function is allowed.
 - **`no-discarded-values` reports every non-transition expression statement in a
-  function.** Assignments, updates, generator `yield`, directive prologues, and
-  a required `super()` call are allowed. Calls, awaits, construction, literals,
-  binary expressions, sequences, and `void expr` are reported.
+  function, except a proven nested unit call.** That call targets a concrete
+  nested function whose return annotation is exactly `undefined`; apart from the
+  declaration identifier, every same-named occurrence must be a direct call
+  inside its owning function body. Assignments, updates, generator `yield`,
+  directive prologues, and required `super()` calls are also allowed. Other
+  calls, awaits, construction, literals, binary expressions, sequences, and
+  `void expr` are reported.
 - **Readonly coverage is declaration-scoped.** Parameter and return annotations
   outside a type alias or interface are silent. The mutable collection list is
   `Array`, `Map`, and `Set`; it does not include every mutable library type.

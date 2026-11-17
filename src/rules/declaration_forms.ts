@@ -12,11 +12,54 @@ const isDestructuring = (
 ): node is Deno.lint.ObjectPattern | Deno.lint.ArrayPattern =>
   node.type === "ObjectPattern" || node.type === "ArrayPattern";
 
+const isFlatIdentifierPattern = (node: Deno.lint.ArrayPattern): boolean =>
+  node.elements.length > 0 &&
+  node.elements.every((element) => element?.type === "Identifier");
+
+const isInsideFunctionBody = (
+  node: Deno.lint.Node,
+  sourceCode: Deno.lint.SourceCode,
+): boolean => {
+  const ancestors = sourceCode.getAncestors(node);
+  for (const ancestor of ancestors.toReversed()) {
+    if (ancestor.type === "StaticBlock") return false;
+    if (
+      ancestor.type !== "FunctionDeclaration" &&
+      ancestor.type !== "FunctionExpression" &&
+      ancestor.type !== "ArrowFunctionExpression"
+    ) {
+      continue;
+    }
+    const body = ancestor.body;
+    return body?.type === "BlockStatement" && ancestors.includes(body);
+  }
+  return false;
+};
+
+const isFlatConstPositionalBinding = (
+  node: Deno.lint.VariableDeclarator,
+  sourceCode: Deno.lint.SourceCode,
+): boolean => {
+  if (node.id.type !== "ArrayPattern" || !isFlatIdentifierPattern(node.id)) {
+    return false;
+  }
+  const declaration = node.parent;
+  if (
+    declaration.type !== "VariableDeclaration" || declaration.kind !== "const"
+  ) {
+    return false;
+  }
+  const owner = declaration.parent;
+  if (owner.type === "ForInStatement") return false;
+  if (owner.type === "ForOfStatement" && owner.await) return false;
+  return isInsideFunctionBody(node, sourceCode);
+};
+
 /**
- * `light-fp/declaration-forms`: domain code binds each name on its own. An arrow
- * assigned to a `const` is an immutable function value. A destructuring pattern
- * hides which member feeds which name. A function expression or a function
- * assigned to a mutable binding remains refused.
+ * `light-fp/declaration-forms`: domain code binds each name on its own. A flat
+ * positional binding inside a function may bind immutable names. An arrow
+ * assigned to a `const` is an immutable function value. Other destructuring, a
+ * function expression, and a function assigned to a mutable binding are refused.
  */
 export const declarationForms: Deno.lint.Rule = {
   create(context) {
@@ -43,6 +86,7 @@ export const declarationForms: Deno.lint.Rule = {
     return {
       VariableDeclarator(node) {
         if (isDestructuring(node.id)) {
+          if (isFlatConstPositionalBinding(node, context.sourceCode)) return;
           context.report({
             node,
             message: DESTRUCTURING_MESSAGE,

@@ -72,12 +72,17 @@ Because "did you handle this `Result`?" needs type information, while a
 discarded expression is visible in one AST.
 
 The rule reports every expression statement inside a function unless the
-expression is an assignment, update, generator `yield`, directive prologue, or
-required `super()` call. An ignored result is either dead code or a hidden
-effect, and neither requires knowing its type.
+expression is an assignment, update, generator `yield`, directive prologue,
+required `super()` call, or a direct call to a concrete nested function whose
+return annotation is exactly `undefined`. The nested function must belong to an
+actual function body. Apart from its declaration identifier, every same-named
+occurrence in the file must be one of its direct calls. `eval` or `with`
+disables this allowance for the file.
 
-That one syntactic check covers ignored `Result` values, floating promises, and
-fire-and-forget calls.
+That narrow exception is a checked-source result contract: it proves only that
+no meaningful result was promised. It does not prove purity, ownership, or
+termination. Ignored `Result` values, promises, other value-returning calls, and
+native mutation calls remain reported.
 
 `void expr`, literals, and binary expressions are reported too. An explicit
 discard is still a discard, and letting `void` through would turn the rule into
