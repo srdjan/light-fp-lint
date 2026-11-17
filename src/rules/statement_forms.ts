@@ -52,7 +52,12 @@ const statementsOf = (node: SyntaxNode): readonly Deno.lint.Node[] => {
   if (node.type === "SwitchCase") {
     return node.parent.cases.flatMap((switchCase) => switchCase.consequent);
   }
-  if (node.type !== "BlockStatement" && node.type !== "Program") return [];
+  if (
+    node.type !== "BlockStatement" && node.type !== "Program" &&
+    node.type !== "TSModuleBlock"
+  ) {
+    return [];
+  }
   return node.body.map((statement) =>
     statement.type === "ExportNamedDeclaration" && statement.declaration
       ? statement.declaration
@@ -75,12 +80,17 @@ const isFunction = (
 /**
  * The binding of `name` that `scope` declares. `alias` is the read chain of a
  * `const` bound to one, and undefined for any other binding. The result is
- * undefined when `scope` does not bind `name`.
+ * undefined when `scope` does not bind `name`. A `var` in a nested block
+ * counts only in that block, not in the whole function: Deno's recommended
+ * `no-var` rule refuses `var`.
  */
 const bindingIn = (scope: SyntaxNode, name: string): Binding | undefined => {
   const other: Binding = { alias: undefined };
   if (isFunction(scope)) {
-    return binds(scope.params, name) ? other : undefined;
+    return binds([scope.id, ...scope.params], name) ? other : undefined;
+  }
+  if (scope.type === "ClassExpression") {
+    return binds([scope.id], name) ? other : undefined;
   }
   if (scope.type === "CatchClause") {
     return binds([scope.param], name) ? other : undefined;

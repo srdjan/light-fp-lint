@@ -273,6 +273,30 @@ check("statement-forms", [
     expect: fires("statement-forms"),
   },
   {
+    name: "a declaration in a class static block shadows an outer const alias",
+    source:
+      `function f(xs: number[], other: number[]): void { const ys = xs; for (const x of xs) { run(class { static { const ys = other; ys.push(x); } }); } }`,
+    expect: silent,
+  },
+  {
+    name: "a class expression name shadows an outer const alias",
+    source:
+      `function f(xs: number[]): void { const ys = xs; for (const x of xs) { run(class ys { static add(n: number): number { return n; } static m(): number { return ys.add(x); } }); } }`,
+    expect: silent,
+  },
+  {
+    name: "a function expression name shadows an outer const alias",
+    source:
+      `function f(xs: { prototype: number[] }): void { const ys = xs; for (const x of xs.prototype) { run(function ys(): void { ys.prototype.push(x); }); } }`,
+    expect: silent,
+  },
+  {
+    name: "a declaration in a namespace shadows an outer const alias",
+    source:
+      `declare const xs: number[]; const ys = xs; namespace N { const ys: number[] = []; for (const x of xs) { ys.push(x); } }`,
+    expect: silent,
+  },
+  {
     name: "a mutation of another collection is fine",
     source:
       `function f(xs: number[], ys: number[]): void { for (const x of xs) { ys.push(x); } }`,
