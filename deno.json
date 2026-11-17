@@ -1,6 +1,6 @@
 {
   "name": "@srdjan/light-fp-lint",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "exports": {
     ".": "./src/mod.ts",
     "./hook": "./src/cli/hook.ts"
