@@ -1,6 +1,6 @@
 # 006: Verification gates
 
-Status: IN PROGRESS
+Status: DONE
 
 ## Request
 
@@ -35,16 +35,16 @@ user then accepted every recommended option for decisions 1 to 6.
 
 ## Units
 
-| Unit | Decision | Change                                                        | Files                                                      | Model  | Acceptance check                                                        | Turns |
-| ---- | -------- | ------------------------------------------------------------- | ---------------------------------------------------------- | ------ | ----------------------------------------------------------------------- | ----- |
-| U1   | 1 (C1)   | Pre-commit gate runs on the staged snapshot                   | `.githooks/pre-commit`, `tests/pre_commit_test.ts`, README | Sonnet | New test fails on the old hook, passes on the new hook; `deno task ci`  | 25    |
-| U2   | 1 (B1)   | README ratchet recipe compiles, and a test keeps it compiling | `README.md`, `tests/readme_ratchet_test.ts`                | Sonnet | New test fails before the README fix, passes after; offline; lock clean | 25    |
-| U3   | 1 (B2)   | `ci:base` runs `deno publish --dry-run --allow-dirty`         | `deno.json`                                                | Opus   | `deno task ci`                                                          | 3     |
-| U4   | 5 (A1)   | Test tasks run `tests` only, so `plans/` leaves the gate      | `deno.json`                                                | Opus   | `deno task ci` passes 945; explicit plans run still works               | 3     |
-| U5   | 2 (C2)   | Deny `git commit --no-verify` and `-n` for Claude Code        | `~/.claude/settings.json`                                  | Opus   | `git commit --dry-run --no-verify` is denied                            | 5     |
-| U6   | 3 (C3)   | Commit rule names the verify skill; project verify skill      | `~/.claude/CLAUDE.md`, `.claude/skills/verify/SKILL.md`    | Opus   | One run of every skill step                                             | 8     |
-| U7   | 4 (D)    | Three-attempt rule in its own section; copy to `~/AGENTS.md`  | `~/.claude/CLAUDE.md`, `~/AGENTS.md`                       | Opus   | Rule text read back; `agents-git` commit                                | 4     |
-| U8   | 6 (B3)   | Drop Deno 2.2 support: latest Deno only                       | -                                                          | -      | PENDING decision 7 (which 2.2 code and tests to delete)                 | -     |
+| Unit | Decision | Change                                                        | Files                                                       | Model  | Acceptance check                                                        | Turns |
+| ---- | -------- | ------------------------------------------------------------- | ----------------------------------------------------------- | ------ | ----------------------------------------------------------------------- | ----- |
+| U1   | 1 (C1)   | Pre-commit gate runs on the staged snapshot                   | `.githooks/pre-commit`, `tests/pre_commit_test.ts`, README  | Sonnet | New test fails on the old hook, passes on the new hook; `deno task ci`  | 25    |
+| U2   | 1 (B1)   | README ratchet recipe compiles, and a test keeps it compiling | `README.md`, `tests/readme_ratchet_test.ts`                 | Sonnet | New test fails before the README fix, passes after; offline; lock clean | 25    |
+| U3   | 1 (B2)   | `ci:base` runs `deno publish --dry-run --allow-dirty`         | `deno.json`                                                 | Opus   | `deno task ci`                                                          | 3     |
+| U4   | 5 (A1)   | Test tasks run `tests` only, so `plans/` leaves the gate      | `deno.json`                                                 | Opus   | `deno task ci` passes 945; explicit plans run still works               | 3     |
+| U5   | 2 (C2)   | Deny `git commit --no-verify` and `-n` for Claude Code        | `~/.claude/settings.json`                                   | Opus   | `git commit --dry-run --no-verify` is denied                            | 5     |
+| U6   | 3 (C3)   | Commit rule names the verify skill; project verify skill      | `~/.claude/CLAUDE.md`, `.claude/skills/verify/SKILL.md`     | Opus   | One run of every skill step                                             | 8     |
+| U7   | 4 (D)    | Three-attempt rule in its own section; copy to `~/AGENTS.md`  | `~/.claude/CLAUDE.md`, `~/AGENTS.md`                        | Opus   | Rule text read back; `agents-git` commit                                | 4     |
+| U8   | 7        | Drop Deno 2.2 support: latest Deno only                       | `src/comments.ts`, `src/layer.ts`, 2 rules, 3 tests, README | Sonnet | Shebang pragma test; break-line mutation caught; `deno task ci`         | 30    |
 
 Commit order: U1 first, so that each later commit is judged on its own staged
 files. Each unit gets its own commit. Nobody pushes.
