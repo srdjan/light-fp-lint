@@ -41,7 +41,7 @@
     "lint": "deno lint",
     "test": "deno test -A",
     "examples:lint": "deno lint --config examples/deno.json examples",
-    "ci:base": "deno fmt --check && deno check src tests tools && deno lint",
+    "ci:base": "deno fmt --check && deno check src tests tools && deno lint && deno publish --dry-run --allow-dirty",
     "ci": "deno task ci:base && LIGHT_FP_REQUIRE_NAMED_HOOKS=1 deno test -A"
   }
 }
