@@ -148,6 +148,22 @@ in the README reach external facilities. That rule also applies to the prelude,
 where other construction inside a function is allowed. Construction at module
 scope runs during import, so `pure-module` reports it in every strict layer.
 
+## Why can a fixed string use `in` inside a function?
+
+Because `"field" in value` asks JavaScript's `HasProperty` question directly. It
+counts an inherited field and can invoke a Proxy `has` trap; it does not read
+the field's value getter merely to test membership. `Object.hasOwn` asks a
+different question and can invoke a Proxy `getOwnPropertyDescriptor` trap, so it
+is not an equivalent replacement.
+
+This bounded static-field allowance is deliberately syntactic: the left side
+must be a string literal, and the query must be inside the nearest actual
+function body. A concise arrow expression is its function body. Parameter
+defaults, module scope, class field initializers, and static blocks stay
+refused, as do dynamic, member, template, numeric, and symbol keys. This
+boundary does not prove purity or own-field validation; TypeScript still checks
+that the right side is an object.
+
 ## Why does the plugin carry zts-model-1 restrictions?
 
 The zts-model-1 profile refuses each construct whose meaning a checker or a

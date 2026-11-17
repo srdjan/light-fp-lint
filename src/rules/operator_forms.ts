@@ -45,11 +45,41 @@ const containsImpure = (value: unknown): boolean => {
 const isBooleanLiteral = (node: Deno.lint.Node): boolean =>
   node.type === "Literal" && typeof node.value === "boolean";
 
+const isStringLiteral = (node: Deno.lint.Node): boolean =>
+  node.type === "Literal" && typeof node.value === "string";
+
+const isInsideFunctionBody = (
+  node: Deno.lint.Node,
+  sourceCode: Deno.lint.SourceCode,
+): boolean => {
+  const ancestors = sourceCode.getAncestors(node);
+  for (const ancestor of ancestors.toReversed()) {
+    if (
+      ancestor.type === "StaticBlock" ||
+      ancestor.type === "PropertyDefinition"
+    ) {
+      return false;
+    }
+    if (
+      ancestor.type !== "FunctionDeclaration" &&
+      ancestor.type !== "FunctionExpression" &&
+      ancestor.type !== "ArrowFunctionExpression"
+    ) {
+      continue;
+    }
+    const body = ancestor.body;
+    return body !== null && (body === node || ancestors.includes(body));
+  }
+  return false;
+};
+
 /**
  * `light-fp/operator-forms`: domain code compares with strict equality, assigns
  * in its own statement, and builds values without coercing or hidden-effect
- * operators. Each refused operator either coerces a value, mutates a binding
- * in the middle of an expression, or runs an effect that a reader cannot see.
+ * operators. A literal field-presence query inside a function retains the
+ * language's inherited-property and Proxy `has` behavior. Each refused operator
+ * either coerces a value, mutates a binding in the middle of an expression, or
+ * runs an effect that a reader cannot see.
  */
 export const operatorForms: Deno.lint.Rule = {
   create(context) {
@@ -81,11 +111,17 @@ export const operatorForms: Deno.lint.Rule = {
             hint: "Discriminate with a tag field such as `_tag`.",
           });
         }
-        if (node.operator === "in") {
+        if (
+          node.operator === "in" &&
+          !(isStringLiteral(node.left) &&
+            isInsideFunctionBody(node, context.sourceCode))
+        ) {
           context.report({
             node,
-            message: "`in` also reads inherited properties.",
-            hint: "Use `Object.hasOwn(record, key)`, or check a tag field.",
+            message:
+              "`in` is allowed only for a string-literal field query inside a function body.",
+            hint:
+              'Move the query into a function and write a fixed key such as `"kind" in value`.',
           });
         }
         if (

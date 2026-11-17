@@ -467,7 +467,7 @@ builds values without coercing or hidden-effect operators.
 | An assignment in an expression, `const m = (n = 2);`, `f(x = 1)`, `a = b = c;` | Assign in its own statement                                              | spec     |
 | An assignment target that calls or assigns, `xs[next()] = 1`, `xs[i++] = 1`    | Compute the key or the object into a `const` first                       | spec     |
 | `x instanceof T`                                                               | Discriminate with a tag field such as `_tag`                             | ZTS001   |
-| `key in record`                                                                | `Object.hasOwn(record, key)`, or check a tag field                       | ZTS001   |
+| A dynamic `key in record`, or any `in` query outside a function body           | Use a fixed string key inside a function, or check a tag field           | ZTS001   |
 | Unary `+x`                                                                     | Remove it from a number, or parse text with `parseFloat`/`parseInt`      | ZTS001   |
 | `void x`                                                                       | Write `undefined`, and run an effect as its own statement                | ZTS001   |
 | `delete o.key`                                                                 | Build a new object without the key                                       | ZTS001   |
@@ -479,6 +479,14 @@ builds values without coercing or hidden-effect operators.
 | An optional computed access, `xs?.[i]`                                         | Check for `undefined`, then index                                        | ZTS001   |
 | A conditional in an arm of a conditional, `a ? b : c ? d : e`                  | `match` from `ts-pattern`, or `if`/`else`                                | ZTS621   |
 | A comparison with a boolean literal, `x === true`                              | Use the boolean directly: `x` or `!x`                                    | ZTS620   |
+
+This bounded static-field syntax allowance admits a string-literal query such as
+`"kind" in value` inside an actual function body, including a concise arrow
+body. It uses JavaScript's `HasProperty` semantics: an inherited field counts,
+and a Proxy `has` trap can run. It is not own-field validation, a purity
+guarantee, or equivalent to `Object.hasOwn`. Dynamic, member, template, numeric,
+and symbol keys remain refused. Parameter defaults, module scope, class field
+initializers, and static blocks remain outside the allowance.
 
 An optional member read such as `a?.b` or `a?.b()`, a conditional in the test
 position, and unary `-`, `!`, `~`, and `typeof` stay allowed. The `RegExp` name
