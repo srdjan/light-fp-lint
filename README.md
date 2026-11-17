@@ -805,8 +805,9 @@ $ git config core.hooksPath .githooks
 ```
 
 `.githooks/pre-commit` runs `deno task ci` and refuses the commit if it fails.
-Nothing else checks this repository, so `--no-verify` skips the only gate there
-is.
+It runs the gate on a copy of the staged files, so unstaged edits and untracked
+files cannot change the result. Nothing else checks this repository, so
+`--no-verify` skips the only gate there is.
 
 The gate requires Git 2.55 or newer and fails if the named-hook E2E tests would
 skip. If the qualifying Git executable is not first on `PATH`, select it
