@@ -594,7 +594,7 @@ import plugin, {
   explain,
   measure,
 } from "jsr:@srdjan/light-fp-lint@^0.8.2";
-import baseline from "./lint-baseline.json" with { type: "json" };
+import { join, relative } from "jsr:@std/path@^1.0.0";
 
 const baseline: Baseline = {
   "src/legacy.ts": 3,
