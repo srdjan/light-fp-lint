@@ -105,6 +105,17 @@ Deno.test("layer: a pragma after the first statement does not count", () => {
   );
 });
 
+Deno.test("layer: a pragma after a shebang line still counts", () => {
+  assertEquals(
+    Deno.lint.runPlugin(
+      plugin,
+      "/repo/src/domain/a.ts",
+      "#!/usr/bin/env -S deno run\n// @light-fp adapter\nexport const now = Date.now();\n",
+    ).map((d) => d.id),
+    [],
+  );
+});
+
 Deno.test("layer: prose mentions are not pragmas", () => {
   assertEquals(
     probe(

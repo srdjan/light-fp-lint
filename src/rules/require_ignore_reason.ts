@@ -1,6 +1,5 @@
 // @light-fp adapter -- a lint rule adapts Deno's visitor API: it reports through a
 // void callback and is driven by mutation it does not own.
-import { commentsOf } from "../comments.ts";
 
 const IGNORE_LINE = /^deno-lint-ignore\s+(.*)$/;
 const IGNORE_FILE = /^deno-lint-ignore-file\s*(.*)$/;
@@ -33,7 +32,7 @@ export const requireIgnoreReason: Deno.lint.Rule = {
   create(context) {
     return {
       Program() {
-        for (const comment of commentsOf(context.sourceCode)) {
+        for (const comment of context.sourceCode.getAllComments()) {
           const text = comment.value.trim();
 
           const fileMatch = IGNORE_FILE.exec(text);

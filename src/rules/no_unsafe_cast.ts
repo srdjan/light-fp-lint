@@ -1,6 +1,5 @@
 // @light-fp adapter -- a lint rule adapts Deno's visitor API: it reports through a
 // void callback and is driven by mutation it does not own.
-import { commentsOf } from "../comments.ts";
 import { isDomain } from "../layer.ts";
 
 const SUPPRESSIONS = /^\s*@ts-(ignore|expect-error|nocheck)\b/;
@@ -52,7 +51,7 @@ export const noUnsafeCast: Deno.lint.Rule = {
 
     return {
       Program() {
-        for (const comment of commentsOf(context.sourceCode)) {
+        for (const comment of context.sourceCode.getAllComments()) {
           const match = SUPPRESSIONS.exec(comment.value);
           if (!match) continue;
           context.report({

@@ -56,7 +56,8 @@ allowance for smart constructors.
 
 ## Quick start
 
-Add the published JSR package to `deno.json`:
+The plugin supports only the latest stable Deno. Add the published JSR package
+to `deno.json`:
 
 ```jsonc
 {
@@ -782,10 +783,6 @@ These limits are measured against the current implementation:
   comment between a callee and its `?.` hides an optional call.
 - **Mutation through an alias is not tracked.** `readonly-data` forces the
   annotations; `deno check` enforces them from there.
-- **Deno 2.2's programmatic lint helper cannot expose source text.** The real
-  `deno lint` command supports every rule on Deno 2.2. Under exactly Deno 2.2,
-  `Deno.lint.runPlugin` cannot observe layer pragmas or suppression comments;
-  use the CLI for those checks or a newer Deno for programmatic comment rules.
 - **External protocol specifiers are not adapter paths.** `npm:`, `node:`,
   `jsr:`, HTTP, and data specifiers are exempt even when their package path
   contains an adapter-named segment. A pure external library in the domain is
@@ -839,17 +836,13 @@ denied. The `Deno.cwd()` suppression names both `no-ambient-effects` and
 diagnostics as ratchet debt. The rule modules, composition root, and hook CLI
 carry adapter pragmas because they adapt imperative APIs.
 
-The current-Deno suite uses `Deno.lint.runPlugin`. `tests/rules_test.ts` is
-table-driven per rule and asserts exact diagnostic counts, so a rule that fires
-twice fails as loudly as one that never fires. `tests/deno_2_2_cli_test.ts`
-drives the real CLI across every plugin rule to keep the oldest supported Deno
-covered; it runs only where `deno --version` reports exactly 2.2.0 and reports
-as ignored everywhere else. `tests/fix_test.ts` asserts the exact text each fix
-produces and then typechecks it. `tests/examples_test.ts` pins the example
-corpus, so the documentation cannot drift away from what the rules do.
-`tests/comments_fallback_test.ts` fabricates a `SourceCode` without
-`getAllComments` so the Deno 2.2 comment-scanner fallback is judged on every
-Deno version, not only on 2.2 itself. `tests/readonly_rederive_test.ts` runs the
+The suite uses `Deno.lint.runPlugin`. `tests/rules_test.ts` is table-driven per
+rule and asserts exact diagnostic counts, so a rule that fires twice fails as
+loudly as one that never fires. `tests/cli_test.ts` drives the real `deno lint`
+CLI across every plugin rule and the example corpus. `tests/fix_test.ts` asserts
+the exact text each fix produces and then typechecks it.
+`tests/examples_test.ts` pins the example corpus, so the documentation cannot
+drift away from what the rules do. `tests/readonly_rederive_test.ts` runs the
 readonly-data rule against a frozen copy of its previous implementation and
 requires identical diagnostics, so a future rewrite that changes behavior fails.
 

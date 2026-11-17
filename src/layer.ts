@@ -9,8 +9,6 @@
 //
 // lists every file that opted out of strictness. No glob configuration can.
 
-import { headerComments } from "./comments.ts";
-
 /**
  * The contract a file is held to. `domain` is the strict default; `adapter` is
  * where effects are allowed to live; `prelude` defines `Result` and the effect
@@ -161,7 +159,7 @@ export function readPragma(sourceCode: Deno.lint.SourceCode): PragmaLookup {
     ? firstStatement.range[0]
     : Number.MAX_SAFE_INTEGER;
 
-  for (const comment of headerComments(sourceCode, limit)) {
+  for (const comment of sourceCode.getAllComments()) {
     if (comment.range[0] >= limit) break;
     const token = pragmaToken(comment.value);
     if (token === undefined) continue;

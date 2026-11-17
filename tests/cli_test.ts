@@ -1,4 +1,4 @@
-// @light-fp adapter -- this compatibility test drives the real Deno CLI.
+// @light-fp adapter -- this test drives the real Deno CLI.
 import { assertEquals } from "@std/assert";
 import { fromFileUrl, join, relative } from "@std/path";
 import lightFpPlugin from "../src/mod.ts";
@@ -72,23 +72,8 @@ const exampleDiagnostics = (
   );
 };
 
-Deno.test({
-  name: "Deno floor: runPlugin survives unavailable source text",
-  ignore: Deno.version.deno !== "2.2.0",
-  fn() {
-    assertEquals(
-      Deno.lint.runPlugin(
-        lightFpPlugin,
-        "/repo/src/domain/floor.ts",
-        "let n = 0;",
-      ).map((diagnostic) => diagnostic.id),
-      ["light-fp/pure-module"],
-    );
-  },
-});
-
-Deno.test("Deno floor: the real CLI loads every rule and honors comments", async () => {
-  const directory = await Deno.makeTempDir({ prefix: "light fp floor " });
+Deno.test("CLI: the real CLI loads every rule and honors comments", async () => {
+  const directory = await Deno.makeTempDir({ prefix: "light fp cli " });
   try {
     const plugin = new URL("../src/mod.ts", import.meta.url).href;
     await Deno.writeTextFile(
@@ -172,7 +157,7 @@ Deno.test("Deno floor: the real CLI loads every rule and honors comments", async
   }
 });
 
-Deno.test("Deno floor: the real CLI matches the exact example corpus", async () => {
+Deno.test("CLI: the real CLI matches the exact example corpus", async () => {
   const examplesRoot = fromFileUrl(new URL("../examples", import.meta.url));
   const output = await runLint(examplesRoot, "src");
 
