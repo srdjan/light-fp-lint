@@ -119,6 +119,16 @@ check("function-forms", [
     expect: fires("function-forms"),
   },
   {
+    name: "an optional positional pattern parameter of a declared function",
+    source: `declare function f([a]?: readonly [number]): number;`,
+    expect: fires("function-forms"),
+  },
+  {
+    name: "an optional object pattern parameter of a declared function",
+    source: `declare function f({ a }?: { a: number }): number;`,
+    expect: fires("function-forms"),
+  },
+  {
     name: "an optional object property is fine",
     source: `type P = { readonly a?: string };`,
     expect: silent,

@@ -440,7 +440,7 @@ arrows.
 | A function expression, such as `run(function () { ... })`                      | A function declaration, or an arrow passed directly as a callback argument | ZTS001   |
 | A generator, `function* g() { yield 1; }`                                      | Return an array                                                            | ZTS001   |
 | A default parameter, `function f(a = 1)`                                       | `function f(a: number \| undefined)`, then `const resolved = a ?? 1;`      | ZTS054   |
-| An optional parameter, `function f(a?: number)`, also in a type or signature   | `function f(a: number \| undefined)`                                       | ZTS055   |
+| An optional parameter or pattern, `f(a?: number)`, also in a type or signature | `function f(a: number \| undefined)`                                       | ZTS055   |
 | A rest parameter, `function f(...rest: number[])`, also in a type or signature | `function f(rest: readonly number[])`                                      | ZTS001   |
 | A call-site spread, `f(...args)`, `new F(...args)`                             | Pass positional arguments                                                  | ZTS616   |
 | A function declaration without a type on each parameter and on its return      | `function f(a: number): number { ... }`                                    | ZTS601   |

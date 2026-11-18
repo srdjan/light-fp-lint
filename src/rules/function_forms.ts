@@ -42,7 +42,10 @@ export const functionForms: Deno.lint.Rule = {
             hint:
               "Accept `name: T | undefined` and resolve it in the body, for example `const resolved = name ?? fallback;`.",
           });
-        } else if (param.type === "Identifier" && param.optional) {
+        } else if (
+          (param.type === "Identifier" || param.type === "ArrayPattern" ||
+            param.type === "ObjectPattern") && param.optional
+        ) {
           context.report({
             node: param,
             message: "An optional parameter lets a caller omit an argument.",
