@@ -1,14 +1,13 @@
 # light-fp-lint: record-forms all-spread restoration — owner handoff
 
-STATUS: READY TO APPLY. The three accepted postimages are NOT yet applied to
-this checkout. Apply the patch below and commit; the enabled pre-commit hook
-runs `deno task ci` on the staged snapshot, which is the required pre-commit
-gate.
+STATUS: DONE. The three accepted postimages landed as commit `671716f`
+(`fix(rules): restore all-spread ordered merges`). Nothing remains to apply or
+commit. The sections below record the state at handoff.
 
 FINAL ACCEPTED by lint-policy (m_2432) on committed base
 `9c4d7cfb2312928b47268e67f3a57bdb528bc6cb`.
 
-## base
+## state at handoff
 
 - HEAD: `9c4d7cfb2312928b47268e67f3a57bdb528bc6cb` (v0.10.0, clean, main).
 - The three paths below are unchanged at their base preimages.
@@ -27,8 +26,10 @@ FINAL ACCEPTED by lint-policy (m_2432) on committed base
   `72308866f37fe01e86aa01caf0171f5c352ec563b9d5a36a46e41a0236280c2a`.
 - Verified: forward-applies from the three preimages to exactly the three
   postimages, and `git apply --check` passes on the clean base.
+- Already applied as commit `671716f`; kept for reference/recovery only — do NOT
+  re-apply.
 
-## apply + commit (shortest invocation)
+## apply + commit (shortest invocation) (done)
 
 ```sh
 cd /Users/srdjans/Code/light-fp-lint
