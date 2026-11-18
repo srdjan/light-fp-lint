@@ -1,10 +1,12 @@
 # light-fp-lint: all-spread ordered-merge allowance — owner handoff
 
-FINAL ACCEPTED by lint-policy (m_2265). LIVE STATE: the three accepted
-postimages are already applied to this working tree — do NOT re-apply. The
-remaining step is one normal-hook local commit of the three files below only.
+STATUS: DONE. The three accepted postimages landed as commit `908b151`
+(`fix(rules): allow all-spread ordered merges`). Nothing remains to apply or
+commit. The sections below record the state at handoff.
 
-## state
+FINAL ACCEPTED by lint-policy (m_2265).
+
+## state at handoff
 
 - Parameter unit: LANDED as commit `0de414ce08c59fb9eff28b5842a30c0fc820f515`
   (message "handoff"); its four postimages are committed and are NOT part of
@@ -26,7 +28,7 @@ SHA-256 `6fc38328891c8027aa3d6bee55e7b5e2ac8d81fa9281bfff25a9e5e964cc9ddb` (273
 lines). Already applied via normal file edits; kept for reference/recovery only
 — do NOT re-apply.
 
-## normal-hook local commit command
+## normal-hook local commit command (done)
 
 From the sibling checkout, stage ONLY the three files (exclude the untracked
 handoff files and every unrelated file), then commit so the normal pre-commit
