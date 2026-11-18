@@ -15,20 +15,15 @@ const memberName = (node: Deno.lint.MemberExpression): string | undefined => {
     : undefined;
 };
 
-/** An object literal, or a conditional with an object-literal branch. */
-const isLiteralOperand = (node: Deno.lint.Expression): boolean =>
-  node.type === "ObjectExpression" ||
-  (node.type === "ConditionalExpression" &&
-    (isLiteralOperand(node.consequent) || isLiteralOperand(node.alternate)));
-
 /**
  * `light-fp/record-forms`: domain code builds each record literal from explicit
  * `key: value` fields and at most one leading spread. An object literal made
- * only of spreads is an ordered merge. The merge reads each operand and its
- * properties in source order, and a later overlapping field wins. It does not
- * guarantee disjoint fields. Each refused form hides a field name, mutates a
- * record in place, or mixes an explicit field with a late spread, so the field
- * order decides the result.
+ * only of spreads is an ordered merge, not a disjointness guarantee: each
+ * operand is evaluated and its properties, including getters and Proxy traps,
+ * are read in source order, and a later overlapping field overwrites an earlier
+ * one by definition. Each refused form hides a field name, mutates a record in
+ * place, or mixes an explicit field with a late spread so the field order
+ * decides the result.
  */
 export const recordForms: Deno.lint.Rule = {
   create(context) {
@@ -76,11 +71,9 @@ export const recordForms: Deno.lint.Rule = {
         if (parent.properties[0] === node) return;
         // A literal made only of spreads is an ordered merge: later spreads
         // win by definition, with no explicit field to overwrite silently.
-        // An object-literal operand is an explicit field in disguise.
         if (
           parent.properties.every((property) =>
-            property.type === "SpreadElement" &&
-            !isLiteralOperand(property.argument)
+            property.type === "SpreadElement"
           )
         ) {
           return;

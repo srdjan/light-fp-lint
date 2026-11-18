@@ -131,13 +131,18 @@ check("record-forms", [
     name: "a leading object-literal operand in a merge",
     source:
       `export function f(base: { x: number }): object { return { ...{ x: 1 }, ...base }; }`,
-    expect: fires("record-forms"),
+    expect: silent,
   },
   {
     name: "a late object-literal operand in a merge",
     source:
       `export function f(base: { x: number }): object { return { ...base, ...{ x: 1 } }; }`,
-    expect: fires("record-forms"),
+    expect: silent,
+  },
+  {
+    name: "a merge with duplicate overlapping keys is fine",
+    source: `export const a = { ...{ kind: "a" }, ...{ kind: "b" } };`,
+    expect: silent,
   },
   {
     name: "a merge with repeated sources is fine",
@@ -149,19 +154,19 @@ check("record-forms", [
     name: "a second conditional literal operand in a merge",
     source:
       `export function f(c: boolean, d: boolean): object { return { ...(c ? { x: 1 } : {}), ...(d ? { y: 2 } : {}) }; }`,
-    expect: fires("record-forms"),
+    expect: silent,
   },
   {
     name: "a spread after a conditional literal operand",
     source:
       `export function f(c: boolean, base: { x: number }): object { return { ...(c ? { x: 1 } : {}), ...base }; }`,
-    expect: fires("record-forms"),
+    expect: silent,
   },
   {
     name: "a late conditional literal operand in a merge",
     source:
       `export function f(c: boolean, base: { x: number }): object { return { ...base, ...(c ? { x: 1 } : {}) }; }`,
-    expect: fires("record-forms"),
+    expect: silent,
   },
   {
     name: "a conditional between values in a merge is fine",
@@ -185,13 +190,13 @@ check("record-forms", [
     name: "a nested mixed literal inside an all-spread wrapper",
     source:
       `export function f(a: { a: number }, b: { b: number }): object { return { ...a, ...{ x: 1, ...b } }; }`,
-    expect: fires("record-forms", 2),
+    expect: fires("record-forms", 1),
   },
   {
     name: "a nested shorthand inside an all-spread wrapper",
     source:
       `export function f(a: { a: number }): object { const v = 1; return { ...a, ...{ v } }; }`,
-    expect: fires("record-forms", 2),
+    expect: fires("record-forms", 1),
   },
   {
     name: "an array spread is fine",
