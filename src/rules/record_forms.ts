@@ -15,6 +15,12 @@ const memberName = (node: Deno.lint.MemberExpression): string | undefined => {
     : undefined;
 };
 
+/** An object literal, or a conditional with an object-literal branch. */
+const isLiteralOperand = (node: Deno.lint.Expression): boolean =>
+  node.type === "ObjectExpression" ||
+  (node.type === "ConditionalExpression" &&
+    (isLiteralOperand(node.consequent) || isLiteralOperand(node.alternate)));
+
 /**
  * `light-fp/record-forms`: domain code builds each record literal from explicit
  * `key: value` fields and at most one leading spread. An object literal made
@@ -74,7 +80,7 @@ export const recordForms: Deno.lint.Rule = {
         if (
           parent.properties.every((property) =>
             property.type === "SpreadElement" &&
-            property.argument.type !== "ObjectExpression"
+            !isLiteralOperand(property.argument)
           )
         ) {
           return;

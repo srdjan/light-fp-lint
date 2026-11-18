@@ -528,7 +528,9 @@ operand is evaluated, and its properties are read in source order. This includes
 getters and Proxy traps. A later overlapping field overwrites an earlier one by
 definition. The allowance covers syntax only. It does not guarantee purity or
 disjoint fields. An object-literal operand, such as `{ ...{ x: 1 }, ...base }`,
-counts as an explicit field. The rule treats that literal as a mixed literal.
+counts as an explicit field. A conditional operand with an object-literal
+branch, such as `...(c ? { x: 1 } : {})`, also counts. The rule treats that
+literal as a mixed literal.
 
 | Refused form                                                          | Write instead                                            | ZTS code |
 | --------------------------------------------------------------------- | -------------------------------------------------------- | -------- |

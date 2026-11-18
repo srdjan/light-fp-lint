@@ -146,9 +146,27 @@ check("record-forms", [
     expect: silent,
   },
   {
-    name: "optional conditional spreads are fine",
+    name: "a second conditional literal operand in a merge",
     source:
       `export function f(c: boolean, d: boolean): object { return { ...(c ? { x: 1 } : {}), ...(d ? { y: 2 } : {}) }; }`,
+    expect: fires("record-forms"),
+  },
+  {
+    name: "a spread after a conditional literal operand",
+    source:
+      `export function f(c: boolean, base: { x: number }): object { return { ...(c ? { x: 1 } : {}), ...base }; }`,
+    expect: fires("record-forms"),
+  },
+  {
+    name: "a late conditional literal operand in a merge",
+    source:
+      `export function f(c: boolean, base: { x: number }): object { return { ...base, ...(c ? { x: 1 } : {}) }; }`,
+    expect: fires("record-forms"),
+  },
+  {
+    name: "a conditional between values in a merge is fine",
+    source:
+      `export function f(c: boolean, a: { x: number }, b: { x: number }): object { return { ...(c ? a : b), ...b }; }`,
     expect: silent,
   },
   {
