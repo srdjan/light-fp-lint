@@ -9,3 +9,11 @@ drafts/
 sessions/
 worktrees/
 .DS_Store
+auth.json
+*.lock
+!deno.lock
+checks.json
+config.toml
+host-id
+prefs.json
+projects.json

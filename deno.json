@@ -13,6 +13,11 @@
       "deno.json"
     ]
   },
+  "fmt": {
+    "exclude": [
+      "bise"
+    ]
+  },
   "lint": {
     "exclude": [
       "examples",
