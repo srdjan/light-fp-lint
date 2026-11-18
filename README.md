@@ -1,6 +1,6 @@
 # @srdjan/light-fp-lint
 
-[![Version](https://img.shields.io/badge/version-0.9.0-blue)](deno.json)
+[![Version](https://img.shields.io/badge/version-0.10.0-blue)](deno.json)
 [![JSR](https://img.shields.io/badge/jsr-@srdjan%2Flight--fp--lint-black?logo=deno)](https://jsr.io/@srdjan/light-fp-lint)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
@@ -62,7 +62,7 @@ to `deno.json`:
 ```jsonc
 {
   "lint": {
-    "plugins": ["jsr:@srdjan/light-fp-lint@^0.9.0"]
+    "plugins": ["jsr:@srdjan/light-fp-lint@^0.10.0"]
   }
 }
 ```
@@ -625,7 +625,7 @@ import plugin, {
   compare,
   explain,
   measure,
-} from "jsr:@srdjan/light-fp-lint@^0.9.0";
+} from "jsr:@srdjan/light-fp-lint@^0.10.0";
 import { join, relative } from "jsr:@std/path@^1.0.0";
 
 const baseline: Baseline = {
@@ -682,15 +682,15 @@ Git 2.55 or newer can install the optional named hook from the versioned package
 export:
 
 ```console
-$ deno run --allow-run=git jsr:@srdjan/light-fp-lint@0.9.0/hook install
-$ deno run --allow-run=git jsr:@srdjan/light-fp-lint@0.9.0/hook status
+$ deno run --allow-run=git jsr:@srdjan/light-fp-lint@0.10.0/hook install
+$ deno run --allow-run=git jsr:@srdjan/light-fp-lint@0.10.0/hook status
 $ git hook list --show-scope pre-commit
 ```
 
 Remove the repository-local `hook.light-fp` namespace:
 
 ```console
-$ deno run --allow-run=git jsr:@srdjan/light-fp-lint@0.9.0/hook uninstall
+$ deno run --allow-run=git jsr:@srdjan/light-fp-lint@0.10.0/hook uninstall
 ```
 
 Install repairs the exact partial state where the command exists but the event
