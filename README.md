@@ -392,21 +392,28 @@ Domain code binds each name on its own. An arrow assigned to a `const` is an
 immutable function value. A function expression or a function assigned to a
 mutable binding remains refused.
 
-| Refused form                                                             | Write instead                                     | ZTS code |
-| ------------------------------------------------------------------------ | ------------------------------------------------- | -------- |
-| Object destructuring outside the flat local `const { a, b } = pair` form | Bind the value, then read each named member       | ZTS001   |
-| Array destructuring outside the narrow local `const [a, b] = pair` form  | Bind the value, then read each indexed member     | ZTS001   |
-| A destructuring parameter, such as `function f({ a }: T)`                | Accept one named parameter, then read each member | ZTS001   |
-| `const f = function ...`                                                 | `const f = (...) => ...`                          | ZTS608   |
-| `let f = () => ...`, `let f = function ...`                              | A `const` arrow or function declaration           | ZTS608   |
+| Refused form                                                                           | Write instead                                     | ZTS code |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------- | -------- |
+| Object destructuring outside the flat local `const { a, b } = pair` form               | Bind the value, then read each named member       | ZTS001   |
+| Array destructuring outside the narrow local `const [a, b] = pair` form                | Bind the value, then read each indexed member     | ZTS001   |
+| An object parameter or a non-flat positional parameter, such as `function f({ a }: T)` | Accept one named parameter, then read each member | ZTS001   |
+| `const f = function ...`                                                               | `const f = (...) => ...`                          | ZTS608   |
+| `let f = () => ...`, `let f = function ...`                                            | A `const` arrow or function declaration           | ZTS608   |
 
 Inside an actual function body, a nonempty `const` array pattern is allowed when
 every element is a plain identifier. The same flat pattern is allowed in a
 synchronous `for...of` head. Top-level patterns, `let`, `var`, holes, defaults,
-rest or nested patterns, parameters, `for...in`, `for await...of`, and class
-static blocks remain refused. This allowance preserves the source iterator's
-`next` and `return` behavior; it does not claim that direct slot reads are
-equivalent.
+rest or nested patterns, `for...in`, `for await...of`, and class static blocks
+remain refused. This allowance preserves the source iterator's `next` and
+`return` behavior; it does not claim that direct slot reads are equivalent.
+
+A nonempty flat positional parameter is allowed when every element is a plain
+identifier, such as `function f([a, b]: readonly [number, number])`. Holes,
+rest, defaults, nested patterns, empty patterns, default-wrapped parameters, and
+object parameters remain refused. This keeps the source destructuring, so the
+argument's iterator protocol and ordered reads run exactly as written; it is a
+syntax allowance, not purity, native-iterator, ownership, or rewrite-equivalence
+validation.
 
 Inside an actual function body, a nonempty `const` object pattern is also
 allowed when every property is a plain shorthand identifier,

@@ -48,9 +48,9 @@ check("declaration-forms", [
     expect: fires("declaration-forms"),
   },
   {
-    name: "an array pattern parameter of a function expression",
+    name: "a single-element positional parameter of a function expression",
     source: `run(function ([a]: readonly number[]): number { return a; });`,
-    expect: fires("declaration-forms"),
+    expect: silent,
   },
   {
     name: "an object pattern parameter of an arrow",
@@ -63,14 +63,58 @@ check("declaration-forms", [
     expect: fires("declaration-forms"),
   },
   {
-    name: "two pattern parameters report twice",
+    name:
+      "an object pattern parameter next to a flat positional one reports once",
     source:
       `function f({ a }: Pair, [b]: readonly number[]): number { return a + b; }`,
-    expect: fires("declaration-forms", 2),
+    expect: fires("declaration-forms"),
   },
   {
     name: "a pattern parameter next to a plain one reports once",
     source: `function f(x: number, { a }: Pair): number { return a + x; }`,
+    expect: fires("declaration-forms"),
+  },
+  {
+    name: "a flat positional parameter of an arrow",
+    source: `run(([a, b]: readonly [number, number]) => a + b);`,
+    expect: silent,
+  },
+  {
+    name: "a contextual unannotated positional callback parameter",
+    source: `run(([a, b]) => a + b);`,
+    expect: silent,
+  },
+  {
+    name: "an elided positional parameter",
+    source:
+      `function f([, b]: readonly [number, number]): number { return b; }`,
+    expect: fires("declaration-forms"),
+  },
+  {
+    name: "a rest positional parameter",
+    source:
+      `function f([a, ...rest]: readonly number[]): number { return a + rest.length; }`,
+    expect: fires("declaration-forms"),
+  },
+  {
+    name: "a nested positional parameter",
+    source:
+      `function f([[a]]: readonly [readonly [number]]): number { return a; }`,
+    expect: fires("declaration-forms"),
+  },
+  {
+    name: "an empty positional parameter",
+    source: `function f([]: readonly []): number { return 0; }`,
+    expect: fires("declaration-forms"),
+  },
+  {
+    name: "a defaulted-element positional parameter",
+    source: `function f([a = 0]: readonly [number]): number { return a; }`,
+    expect: fires("declaration-forms"),
+  },
+  {
+    name: "a default-wrapped positional parameter",
+    source: `run(([a, b] = [1, 2]) => a + b);`,
     expect: fires("declaration-forms"),
   },
   {
@@ -244,10 +288,10 @@ check("declaration-forms", [
     expect: fires("declaration-forms"),
   },
   {
-    name: "an array pattern parameter",
+    name: "a flat positional parameter of a declaration",
     source:
       `function f([a, b]: readonly [number, number]): number { return a + b; }`,
-    expect: fires("declaration-forms"),
+    expect: silent,
   },
   {
     name: "a for...in array binding inside a function",
@@ -491,6 +535,38 @@ Deno.test("declaration-forms: an any annotation to reach an object binding remai
     ruleCount("declaration-forms", source),
     ruleCount("no-unsafe-cast", source),
   ], [0, 1]);
+});
+
+Deno.test("declaration-forms: a default-wrapped positional parameter stays refused by both rules", () => {
+  const source = `run(([a, b] = [1, 2]) => a + b);`;
+  assertEquals([
+    ruleCount("declaration-forms", source),
+    ruleCount("function-forms", source),
+  ], [1, 1]);
+});
+
+Deno.test("declaration-forms: an any annotation on a flat positional parameter stays diagnosed", () => {
+  const source = `function first([a, b]: any): number { return a + b; }`;
+  assertEquals([
+    ruleCount("declaration-forms", source),
+    ruleCount("no-unsafe-cast", source),
+  ], [0, 1]);
+});
+
+Deno.test("declaration-forms: a flat positional parameter keeps data and discarded diagnostics independent", () => {
+  const source = `type Input = { readonly pair: number[] };
+type Result = { readonly ok: boolean };
+function result(): Result { return { ok: true }; }
+function first([input]: readonly [Input]): number {
+  const [value] = input.pair;
+  result();
+  return value;
+}`;
+  assertEquals([
+    ruleCount("declaration-forms", source),
+    ruleCount("readonly-data", source),
+    ruleCount("no-discarded-values", source),
+  ], [0, 1, 1]);
 });
 
 Deno.test("declaration-forms: mutable object data remains diagnosed", () => {

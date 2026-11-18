@@ -387,6 +387,25 @@ check("statement-forms", [
       `function f(state: State): void { const { items } = state; for (const x of state.items) { const change = (items: number[]): void => { items.push(x); }; change([]); } }`,
     expect: silent,
   },
+  {
+    name: "a live mutation of a flat positional parameter",
+    source:
+      `function f([items]: readonly [number[]]): number[] { for (const x of items) { items[0] = x; } return items; }`,
+    expect: fires("statement-forms"),
+  },
+  {
+    name:
+      "a mutation of a different collection through a flat positional parameter",
+    source:
+      `function f([items]: readonly [number[]], other: number[]): number[] { for (const x of other) { items[0] = x; } return items; }`,
+    expect: silent,
+  },
+  {
+    name: "an inner positional parameter shadows an outer iterated collection",
+    source:
+      `function f(xs: number[]): readonly number[] { for (const x of xs) { const change = ([xs]: readonly [number[]]): readonly number[] => { xs[0] = x; return xs; }; return change([[]]); } return []; }`,
+    expect: silent,
+  },
   // Layers.
   {
     name: "an adapter file is exempt",
