@@ -523,7 +523,10 @@ assignment or a sequence in a `for` header belongs to `statement-forms`.
 ### `light-fp/record-forms`
 
 Domain code builds each record from explicit `key: value` fields and at most one
-leading spread.
+leading spread. An object literal made only of spreads is an ordered merge: each
+operand is evaluated and its properties, including getters and Proxy traps, are
+read in source order, and a later overlapping field overwrites an earlier one by
+definition. This is a syntax allowance, not a purity or disjointness guarantee.
 
 | Refused form                                                          | Write instead                                            | ZTS code |
 | --------------------------------------------------------------------- | -------------------------------------------------------- | -------- |
@@ -531,11 +534,14 @@ leading spread.
 | A method property, `{ run() {} }`                                     | A field that holds an arrow, `{ run: (x: T): R => ... }` | ZTS001   |
 | A computed key, `{ [k]: v }`                                          | A literal field name, or `Object.fromEntries`            | ZTS001   |
 | A numeric key, `{ 1: "a" }`                                           | A string key, or an array for dense indices              | ZTS001   |
-| A spread that is not the first member, `{ x: 1, ...base }`            | One leading spread, `{ ...base, x: 1 }`                  | ZTS614   |
+| A non-leading spread in a mixed literal, `{ x: 1, ...base }`          | One leading spread, `{ ...base, x: 1 }`                  | ZTS614   |
 | `Object.assign`, `Object.freeze`, `Object.isFrozen` (global `Object`) | Object spread, `{ ...base, key: value }`                 | ZTS001   |
 
 A getter and a setter belong to `no-oo`. A shorthand property or a spread in an
 object pattern belongs to `declaration-forms`. An array spread stays allowed.
+The "write instead" for a mixed literal is a suggestion, not a
+source-equivalence proof: reordering changes which field wins, so a
+mixed-literal finding needs its own semantic justification before reordering.
 
 ### `light-fp/type-forms`
 

@@ -1,4 +1,4 @@
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertStringIncludes } from "@std/assert";
 import { ADAPTER, check, diagnose, DOMAIN, fires, silent } from "./harness.ts";
 
 check("record-forms", [
@@ -107,21 +107,68 @@ check("record-forms", [
     expect: fires("record-forms"),
   },
   {
-    name: "a second spread",
+    name: "a two-spread merge is fine",
     source:
       `export function f(a: { a: number }, b: { b: number }): object { return { ...a, ...b }; }`,
+    expect: silent,
+  },
+  {
+    name: "a three-spread merge is fine",
+    source:
+      `export function f(a: { a: number }, b: { b: number }): object { return { ...a, ...b, ...a }; }`,
+    expect: silent,
+  },
+  {
+    name: "a merge with duplicate overlapping keys is fine",
+    source: `export const a: object = { ...{ kind: "a" }, ...{ kind: "b" } };`,
+    expect: silent,
+  },
+  {
+    name: "a merge with repeated sources is fine",
+    source:
+      `export function f(a: { a: number }): object { return { ...a, ...a }; }`,
+    expect: silent,
+  },
+  {
+    name: "optional conditional spreads are fine",
+    source:
+      `export function f(c: boolean, d: boolean): object { return { ...(c ? { x: 1 } : {}), ...(d ? { y: 2 } : {}) }; }`,
+    expect: silent,
+  },
+  {
+    name: "a late spread in a mixed literal",
+    source:
+      `export function f(a: { a: number }, b: { b: number }): object { return { ...a, x: 1, ...b }; }`,
     expect: fires("record-forms"),
   },
   {
-    name: "each late spread reports once",
+    name: "two late spreads in a mixed literal report once each",
     source:
-      `export function f(a: { a: number }, b: { b: number }): object { return { ...a, ...b, ...a }; }`,
+      `export function f(a: { a: number }, b: { b: number }): object { return { x: 1, ...a, ...b }; }`,
     expect: fires("record-forms", 2),
+  },
+  {
+    name: "a nested mixed literal inside an all-spread wrapper",
+    source:
+      `export function f(a: { a: number }, b: { b: number }): object { return { ...a, ...{ x: 1, ...b } }; }`,
+    expect: fires("record-forms"),
+  },
+  {
+    name: "a nested shorthand inside an all-spread wrapper",
+    source:
+      `export function f(a: { a: number }): object { const v = 1; return { ...a, ...{ v } }; }`,
+    expect: fires("record-forms"),
   },
   {
     name: "an array spread is fine",
     source:
       `export function f(a: readonly number[]): readonly number[] { return [1, ...a, ...a]; }`,
+    expect: silent,
+  },
+  {
+    name: "a call-site spread is fine",
+    source:
+      `export function f(a: readonly number[]): number { return Math.max(...a); }`,
     expect: silent,
   },
   {
@@ -215,4 +262,126 @@ Deno.test("record-forms: Object.assign names the member", () => {
   assertEquals(messagesOf(`export const a = Object.assign({}, {});`), [
     "`Object.assign` mutates or freezes a record in place.",
   ]);
+});
+
+const ruleCount = (rule: string, source: string): number =>
+  diagnose(source, DOMAIN).filter((diagnostic) =>
+    diagnostic.id === `light-fp/${rule}`
+  ).length;
+
+Deno.test("record-forms: an all-spread merge does not silence pure-module", () => {
+  const source = `function source(): { a: number } { return { a: 1 }; }
+function other(): { b: number } { return { b: 2 }; }
+const merged = { ...source(), ...other() };`;
+  assertEquals([
+    ruleCount("record-forms", source),
+    ruleCount("pure-module", source),
+  ], [0, 2]);
+});
+
+Deno.test("record-forms: an all-spread merge keeps the cast diagnostic", () => {
+  const source =
+    `function f(input: unknown): object { return { ...(input as { a: number }), ...{ b: 2 } }; }`;
+  assertEquals([
+    ruleCount("record-forms", source),
+    ruleCount("no-unsafe-cast", source),
+  ], [0, 1]);
+});
+
+Deno.test("record-forms: an all-spread merge keeps the any-annotation diagnostic", () => {
+  const source =
+    `function f(input: any): object { return { ...input, ...{ b: 2 } }; }`;
+  assertEquals([
+    ruleCount("record-forms", source),
+    ruleCount("no-unsafe-cast", source),
+  ], [0, 1]);
+});
+
+Deno.test("record-forms: an all-spread merge keeps the ambient diagnostic", () => {
+  const source =
+    `function f(): object { return { ...Deno.args, ...{ b: 2 } }; }`;
+  assertEquals([
+    ruleCount("record-forms", source),
+    ruleCount("no-ambient-effects", source),
+  ], [0, 1]);
+});
+
+Deno.test("record-forms: an all-spread merge keeps the discarded-result diagnostic", () => {
+  const source = `type Result = { readonly ok: boolean };
+function result(): Result { return { ok: true }; }
+function f(): object { result(); return { ...{ a: 1 }, ...{ b: 2 } }; }`;
+  assertEquals([
+    ruleCount("record-forms", source),
+    ruleCount("no-discarded-values", source),
+  ], [0, 1]);
+});
+
+Deno.test("record-forms: an all-spread merge evaluates operands and getters in order", () => {
+  const events: string[] = [];
+  const left = (): { x: string } => {
+    events.push("left.operand");
+    return {
+      get x(): string {
+        events.push("left.x");
+        return "left";
+      },
+    };
+  };
+  const right = (): { x: string } => {
+    events.push("right.operand");
+    return {
+      get x(): string {
+        events.push("right.x");
+        return "right";
+      },
+    };
+  };
+  const merged = { ...left(), ...right() };
+  assertEquals(merged.x, "right");
+  assertEquals(events, ["left.operand", "left.x", "right.operand", "right.x"]);
+});
+
+const checkCompiler = async (
+  source: string,
+): Promise<{ ok: boolean; stderr: string }> => {
+  const directory = await Deno.makeTempDir({ prefix: "light-fp-record-" });
+  const path = `${directory}/fixture.ts`;
+  try {
+    await Deno.writeTextFile(path, source);
+    const output = await new Deno.Command(Deno.execPath(), {
+      args: ["check", "--cached-only", "--no-config", "--no-lock", path],
+      stdout: "null",
+      stderr: "piped",
+    }).output();
+    return {
+      ok: output.success,
+      stderr: new TextDecoder().decode(output.stderr),
+    };
+  } finally {
+    await Deno.remove(directory, { recursive: true });
+  }
+};
+
+Deno.test("record-forms: an ordered merge compiles with the later field winning", async () => {
+  const source = `type L = { kind: "a" };
+type R = { kind: "b" };
+function merge(l: L, r: R): { kind: "b" } { return { ...l, ...r }; }`;
+  assertEquals((await checkCompiler(source)).ok, true);
+});
+
+Deno.test("record-forms: spreading an unknown in a multi-spread rejects", async () => {
+  const source =
+    `function f(x: unknown): object { return { ...x, ...{ b: 2 } }; }`;
+  const result = await checkCompiler(source);
+  assertEquals(result.ok, false);
+  assertStringIncludes(result.stderr, "TS2698");
+});
+
+Deno.test("record-forms: an incompatible merged result rejects", async () => {
+  const source = `type L = { kind: "a" };
+type R = { kind: "b" };
+function merge(l: L, r: R): { kind: "a" } { return { ...l, ...r }; }`;
+  const result = await checkCompiler(source);
+  assertEquals(result.ok, false);
+  assertStringIncludes(result.stderr, "TS2322");
 });
