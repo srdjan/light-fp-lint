@@ -356,6 +356,37 @@ check("statement-forms", [
       `function f(xs: number[][]): void { for (const x of xs[0]) { xs[0].push(x); } }`,
     expect: silent,
   },
+  {
+    name: "a mutation through a flat shorthand const object binding",
+    source:
+      `function f(state: State): void { const { items } = state; for (const x of state.items) { items.push(x); } }`,
+    expect: fires("statement-forms"),
+  },
+  {
+    name:
+      "a mutation of the original through a loop over the shorthand binding",
+    source:
+      `function f(state: State): void { const { items } = state; for (const x of items) { state.items.push(x); } }`,
+    expect: fires("statement-forms"),
+  },
+  {
+    name: "a chained shorthand alias resolves through the member",
+    source:
+      `function f(state: State): void { const { items } = state; const { entries } = items; for (const x of entries) { state.items.entries.push(x); } }`,
+    expect: fires("statement-forms"),
+  },
+  {
+    name: "an unrelated object binding does not steal a later name",
+    source:
+      `function f(): readonly number[] { const state = { items: [1, 2] }; const otherState = { other: [3] }; const { other } = otherState; const { items } = state; for (const x of state.items) { items[0] = x; } return other; }`,
+    expect: fires("statement-forms"),
+  },
+  {
+    name: "an inner parameter shadows a destructured shorthand alias",
+    source:
+      `function f(state: State): void { const { items } = state; for (const x of state.items) { const change = (items: number[]): void => { items.push(x); }; change([]); } }`,
+    expect: silent,
+  },
   // Layers.
   {
     name: "an adapter file is exempt",

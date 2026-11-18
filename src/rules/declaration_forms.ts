@@ -1,5 +1,6 @@
 // @light-fp adapter -- a lint rule adapts Deno's visitor API: it reports through a
 // void callback and is driven by mutation it does not own.
+import { isFlatShorthandObjectPattern } from "../ast.ts";
 import { isDomain } from "../layer.ts";
 
 const DESTRUCTURING_MESSAGE =
@@ -55,11 +56,34 @@ const isFlatConstPositionalBinding = (
   return isInsideFunctionBody(node, sourceCode);
 };
 
+const isFlatConstObjectBinding = (
+  node: Deno.lint.VariableDeclarator,
+  sourceCode: Deno.lint.SourceCode,
+): boolean => {
+  if (
+    node.id.type !== "ObjectPattern" ||
+    !isFlatShorthandObjectPattern(node.id)
+  ) {
+    return false;
+  }
+  const declaration = node.parent;
+  if (
+    declaration.type !== "VariableDeclaration" || declaration.kind !== "const"
+  ) {
+    return false;
+  }
+  const owner = declaration.parent;
+  if (owner.type === "ForInStatement") return false;
+  if (owner.type === "ForOfStatement" && owner.await) return false;
+  return isInsideFunctionBody(node, sourceCode);
+};
+
 /**
  * `light-fp/declaration-forms`: domain code binds each name on its own. A flat
- * positional binding inside a function may bind immutable names. An arrow
- * assigned to a `const` is an immutable function value. Other destructuring, a
- * function expression, and a function assigned to a mutable binding are refused.
+ * positional or flat shorthand object binding inside a function may bind
+ * immutable names. An arrow assigned to a `const` is an immutable function
+ * value. Other destructuring, a function expression, and a function assigned
+ * to a mutable binding are refused.
  */
 export const declarationForms: Deno.lint.Rule = {
   create(context) {
@@ -86,7 +110,12 @@ export const declarationForms: Deno.lint.Rule = {
     return {
       VariableDeclarator(node) {
         if (isDestructuring(node.id)) {
-          if (isFlatConstPositionalBinding(node, context.sourceCode)) return;
+          if (
+            isFlatConstPositionalBinding(node, context.sourceCode) ||
+            isFlatConstObjectBinding(node, context.sourceCode)
+          ) {
+            return;
+          }
           context.report({
             node,
             message: DESTRUCTURING_MESSAGE,

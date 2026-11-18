@@ -145,8 +145,102 @@ check("declaration-forms", [
     expect: fires("declaration-forms"),
   },
   {
-    name: "an object binding inside a function",
+    name: "a flat const object binding inside a function",
     source: `function f(): number { const { a } = pair; return a; }`,
+    expect: silent,
+  },
+  {
+    name: "a two-field flat const object binding inside a function",
+    source: `function f(): number { const { a, b } = pair; return a + b; }`,
+    expect: silent,
+  },
+  {
+    name: "a flat const object binding inside a nested block",
+    source:
+      `function f(pair: Pair, usePair: boolean): number { if (usePair) { const { a, b } = pair; return a + b; } return 0; }`,
+    expect: silent,
+  },
+  {
+    name: "a flat const object binding inside a function expression body",
+    source:
+      `run(function (pair: Pair): number { const { a, b } = pair; return a + b; });`,
+    expect: silent,
+  },
+  {
+    name: "a flat const object binding inside an arrow body",
+    source:
+      `const f = (pair: Pair): number => { const { a, b } = pair; return a + b; };`,
+    expect: silent,
+  },
+  {
+    name: "a synchronous for...of object binding inside a function",
+    source:
+      `function f(pairs: readonly Pair[]): number { for (const { a, b } of pairs) { return a + b; } return 0; }`,
+    expect: silent,
+  },
+  {
+    name: "a let object binding inside a function",
+    source: `function f(): number { let { a } = pair; return a; }`,
+    expect: fires("declaration-forms"),
+  },
+  {
+    name: "a var object binding inside a function",
+    source: `function f(): number { var { a } = pair; return a; }`,
+    expect: fires("declaration-forms"),
+  },
+  {
+    name: "a renamed object binding inside a function",
+    source:
+      `function f(): number { const { a: renamed } = pair; return renamed; }`,
+    expect: fires("declaration-forms"),
+  },
+  {
+    name: "a defaulted object binding inside a function",
+    source: `function f(): number { const { a = 0 } = pair; return a; }`,
+    expect: fires("declaration-forms"),
+  },
+  {
+    name: "a rest object binding inside a function",
+    source:
+      `function f(): number { const { a, ...rest } = pair; return a + rest.b; }`,
+    expect: fires("declaration-forms"),
+  },
+  {
+    name: "a nested object binding inside a function",
+    source: `function f(): number { const { a: { b } } = pair; return b; }`,
+    expect: fires("declaration-forms"),
+  },
+  {
+    name: "a computed object binding inside a function",
+    source: `function f(): number { const { [key]: a } = pair; return a; }`,
+    expect: fires("declaration-forms"),
+  },
+  {
+    name: "an empty object binding inside a function",
+    source: `function f(): undefined { const {} = pair; return undefined; }`,
+    expect: fires("declaration-forms"),
+  },
+  {
+    name: "a top-level object binding",
+    source: `const { a } = pair; export const f = (): number => a;`,
+    expect: fires("declaration-forms"),
+  },
+  {
+    name: "a for...in object binding inside a function",
+    source:
+      `function f(table: Table): undefined { for (const { length } in table) { use(length); } return undefined; }`,
+    expect: fires("declaration-forms"),
+  },
+  {
+    name: "a for-await object binding inside a function",
+    source:
+      `async function f(pairs: AsyncIterable<Pair>): Promise<undefined> { for await (const { a, b } of pairs) { use(a, b); } return undefined; }`,
+    expect: fires("declaration-forms"),
+  },
+  {
+    name: "a static block object binding inside a function",
+    source:
+      `function f(): undefined { class C { static { const { a } = pair; use(a); } } return undefined; }`,
     expect: fires("declaration-forms"),
   },
   {
@@ -349,6 +443,214 @@ function usePair(pair: Pair): undefined {
     ruleCount("declaration-forms", source),
     ruleCount("no-discarded-values", source),
   ], [0, 2]);
+});
+
+Deno.test("declaration-forms: shorthand object binding keeps the live-iteration safeguard", () => {
+  const shorthand = `type State = { readonly items: number[] };
+function change(state: State): undefined {
+  const { items } = state;
+  for (const x of state.items) { items.push(x); }
+  return undefined;
+}`;
+  const explicit = `type State = { readonly items: number[] };
+function change(state: State): undefined {
+  const items = state.items;
+  for (const x of state.items) { items.push(x); }
+  return undefined;
+}`;
+  assertEquals([
+    ruleCount("declaration-forms", shorthand),
+    ruleCount("statement-forms", shorthand),
+    ruleCount("declaration-forms", explicit),
+    ruleCount("statement-forms", explicit),
+  ], [0, 1, 0, 1]);
+});
+
+Deno.test("declaration-forms: an ambient object source remains diagnosed", () => {
+  const source =
+    `function first(): number { const { length } = Deno.args; return length; }`;
+  assertEquals([
+    ruleCount("declaration-forms", source),
+    ruleCount("no-ambient-effects", source),
+  ], [0, 1]);
+});
+
+Deno.test("declaration-forms: an unsafe cast to reach an object binding remains diagnosed", () => {
+  const source =
+    `function first(input: unknown): number { const { a } = input as { readonly a: number }; return a; }`;
+  assertEquals([
+    ruleCount("declaration-forms", source),
+    ruleCount("no-unsafe-cast", source),
+  ], [0, 1]);
+});
+
+Deno.test("declaration-forms: an any annotation to reach an object binding remains diagnosed", () => {
+  const source =
+    `function first(input: any): number { const { a } = input; return a; }`;
+  assertEquals([
+    ruleCount("declaration-forms", source),
+    ruleCount("no-unsafe-cast", source),
+  ], [0, 1]);
+});
+
+Deno.test("declaration-forms: mutable object data remains diagnosed", () => {
+  const source = `type Input = { readonly items: number[] };
+function first(input: Input): number { const { items } = input; return items.length; }`;
+  assertEquals([
+    ruleCount("declaration-forms", source),
+    ruleCount("readonly-data", source),
+  ], [0, 1]);
+});
+
+Deno.test("declaration-forms: ignored Result and Promise calls with object binding remain diagnosed", () => {
+  const source = `type Pair = { readonly a: number; readonly b: number };
+type Result = { readonly ok: boolean };
+function result(): Result { return { ok: true }; }
+function pending(): Promise<undefined> { return Promise.resolve(undefined); }
+function usePair(pair: Pair): undefined {
+  const { a, b } = pair;
+  result();
+  pending();
+  return undefined;
+}`;
+  assertEquals([
+    ruleCount("declaration-forms", source),
+    ruleCount("no-discarded-values", source),
+  ], [0, 2]);
+});
+
+Deno.test("declaration-forms: shorthand reads members once, in order, from one RHS", () => {
+  const events: string[] = [];
+  let evaluations = 0;
+  const record = {
+    get a(): string {
+      events.push("a");
+      return "A";
+    },
+    get b(): string {
+      events.push("b");
+      return "B";
+    },
+  };
+  const rhs = (): typeof record => {
+    evaluations += 1;
+    return record;
+  };
+  const { a, b } = rhs();
+  assertEquals([a, b], ["A", "B"]);
+  assertEquals(events, ["a", "b"]);
+  assertEquals(evaluations, 1);
+});
+
+const checkCompiler = async (source: string): Promise<boolean> => {
+  const directory = await Deno.makeTempDir({ prefix: "light-fp-object-" });
+  const path = `${directory}/fixture.ts`;
+  try {
+    await Deno.writeTextFile(path, source);
+    const output = await new Deno.Command(Deno.execPath(), {
+      args: ["check", "--cached-only", "--no-config", "--no-lock", path],
+      stdout: "null",
+      stderr: "piped",
+    }).output();
+    return output.success;
+  } finally {
+    await Deno.remove(directory, { recursive: true });
+  }
+};
+
+Deno.test("declaration-forms: object binding compiles for valid records", async () => {
+  const source = `type Pair = { readonly a: number; readonly b: number };
+function sum(pair: Pair): number {
+  const { a, b } = pair;
+  return a + b;
+}`;
+  assertEquals(await checkCompiler(source), true);
+});
+
+Deno.test("declaration-forms: a string length shorthand compiles", async () => {
+  const source = `function width(text: string): number {
+  const { length } = text;
+  return length;
+}`;
+  assertEquals(await checkCompiler(source), true);
+});
+
+Deno.test("declaration-forms: object binding rejects unknown, null, and a missing field", async () => {
+  const unknownSource =
+    `function first(input: unknown): number { const { a } = input; return a; }`;
+  const nullSource =
+    `function first(input: null): number { const { a } = input; return a; }`;
+  const missingSource = `type Pair = { readonly a: number };
+function first(pair: Pair): number { const { b } = pair; return b; }`;
+  assertEquals(await checkCompiler(unknownSource), false);
+  assertEquals(await checkCompiler(nullSource), false);
+  assertEquals(await checkCompiler(missingSource), false);
+});
+
+Deno.test("declaration-forms: object binding rejects an optional field read as required", async () => {
+  const source = `type Pair = { readonly a?: number };
+function first(pair: Pair): number { const { a } = pair; return a; }`;
+  assertEquals(await checkCompiler(source), false);
+});
+
+Deno.test("declaration-forms: valid scopes and refused shapes all compile", async () => {
+  const cases: readonly [string, string][] = [
+    [
+      "a synchronous for...of head",
+      `type Pair = { readonly a: number; readonly b: number };
+function first(pairs: readonly Pair[]): number {
+  for (const { a, b } of pairs) { return a + b; }
+  return 0;
+}`,
+    ],
+    [
+      "a function expression body",
+      `type Pair = { readonly a: number; readonly b: number };
+declare const run: (f: (pair: Pair) => number) => void;
+run(function (pair: Pair): number { const { a, b } = pair; return a + b; });`,
+    ],
+    [
+      "an arrow body",
+      `type Pair = { readonly a: number; readonly b: number };
+const f = (pair: Pair): number => { const { a, b } = pair; return a + b; };`,
+    ],
+    [
+      "a nested block",
+      `type Pair = { readonly a: number; readonly b: number };
+function first(pair: Pair, use: boolean): number {
+  if (use) { const { a, b } = pair; return a + b; }
+  return 0;
+}`,
+    ],
+    [
+      "a rename shape",
+      `type Pair = { readonly a: number };
+function first(pair: Pair): number { const { a: renamed } = pair; return renamed; }`,
+    ],
+    [
+      "a default shape",
+      `type Pair = { readonly a?: number };
+function first(pair: Pair): number { const { a = 0 } = pair; return a; }`,
+    ],
+    [
+      "a rest shape",
+      `type Pair = { readonly a: number; readonly b: number };
+function first(pair: Pair): number { const { a, ...rest } = pair; return a + rest.b; }`,
+    ],
+    [
+      "a nested shape",
+      `type Nested = { readonly a: { readonly b: number } };
+function first(pair: Nested): number { const { a: { b } } = pair; return b; }`,
+    ],
+    [
+      "a computed shape",
+      `type Pair = { readonly a: number };
+function first(pair: Pair, key: "a"): number { const { [key]: a } = pair; return a; }`,
+    ],
+  ];
+  for (const [name, source] of cases) {
+    assertEquals(await checkCompiler(source), true, name);
+  }
 });
 
 type ObservedPair = {

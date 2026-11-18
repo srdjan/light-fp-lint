@@ -58,6 +58,21 @@ export const patternNames = (node: SyntaxNode | null): readonly string[] => {
 };
 
 /**
+ * True for a nonempty object pattern whose every property is a plain shorthand
+ * identifier (`{ a, b }`). Renames, defaults, rest, nested, and computed
+ * properties make the pattern not flat.
+ */
+export const isFlatShorthandObjectPattern = (
+  node: Deno.lint.ObjectPattern,
+): boolean =>
+  node.properties.length > 0 &&
+  node.properties.every((property) =>
+    property.type === "Property" && property.kind === "init" &&
+    !property.computed && !property.method && property.shorthand &&
+    property.key.type === "Identifier" && property.value.type === "Identifier"
+  );
+
+/**
  * The names a file binds itself: imports, variable declarators, function and
  * class names, parameters, catch parameters, and enum, namespace, and import
  * alias names. A global name that appears here is shadowed, not ambient.

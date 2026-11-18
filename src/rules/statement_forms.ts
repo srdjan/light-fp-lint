@@ -2,6 +2,7 @@
 // void callback and is driven by mutation it does not own.
 import {
   childValuesOf,
+  isFlatShorthandObjectPattern,
   isNode,
   patternNames,
   type SyntaxNode,
@@ -65,7 +66,10 @@ const statementsOf = (node: SyntaxNode): readonly Deno.lint.Node[] => {
   );
 };
 
-type Binding = { readonly alias: Deno.lint.Node | undefined };
+type Binding = {
+  readonly alias: Deno.lint.Node | undefined;
+  readonly member?: string;
+};
 
 const isFunction = (
   node: SyntaxNode,
@@ -117,6 +121,19 @@ const bindingIn = (scope: SyntaxNode, name: string): Binding | undefined => {
               isReadChain(init)
             ? { alias: init }
             : other;
+        }
+        if (
+          declarator.id.type === "ObjectPattern" &&
+          statement.kind === "const" && declarator.init !== null &&
+          isReadChain(declarator.init) &&
+          isFlatShorthandObjectPattern(declarator.id) &&
+          declarator.id.properties.some((property) =>
+            property.type === "Property" &&
+            property.value.type === "Identifier" &&
+            property.value.name === name
+          )
+        ) {
+          return { alias: declarator.init, member: name };
         }
         if (binds([declarator.id], name)) return other;
       }
@@ -236,9 +253,10 @@ export const statementForms: Deno.lint.Rule = {
       const binding = bindingOf(root, root.name);
       if (binding?.alias === undefined) return { scope: binding?.scope, text };
       const aliased = placeOf(binding.alias, hops - 1);
+      const member = binding.member === undefined ? "" : `.${binding.member}`;
       return aliased === undefined ? undefined : {
         scope: aliased.scope,
-        text: aliased.text + text.slice(textOf(root).length),
+        text: aliased.text + member + text.slice(textOf(root).length),
       };
     };
 
