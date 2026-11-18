@@ -128,9 +128,16 @@ check("record-forms", [
     expect: silent,
   },
   {
-    name: "a merge with duplicate overlapping keys is fine",
-    source: `export const a: object = { ...{ kind: "a" }, ...{ kind: "b" } };`,
-    expect: silent,
+    name: "a leading object-literal operand in a merge",
+    source:
+      `export function f(base: { x: number }): object { return { ...{ x: 1 }, ...base }; }`,
+    expect: fires("record-forms"),
+  },
+  {
+    name: "a late object-literal operand in a merge",
+    source:
+      `export function f(base: { x: number }): object { return { ...base, ...{ x: 1 } }; }`,
+    expect: fires("record-forms"),
   },
   {
     name: "a merge with repeated sources is fine",
@@ -160,13 +167,13 @@ check("record-forms", [
     name: "a nested mixed literal inside an all-spread wrapper",
     source:
       `export function f(a: { a: number }, b: { b: number }): object { return { ...a, ...{ x: 1, ...b } }; }`,
-    expect: fires("record-forms"),
+    expect: fires("record-forms", 2),
   },
   {
     name: "a nested shorthand inside an all-spread wrapper",
     source:
       `export function f(a: { a: number }): object { const v = 1; return { ...a, ...{ v } }; }`,
-    expect: fires("record-forms"),
+    expect: fires("record-forms", 2),
   },
   {
     name: "an array spread is fine",
@@ -285,7 +292,7 @@ const merged = { ...source(), ...other() };`;
 
 Deno.test("record-forms: an all-spread merge keeps the cast diagnostic", () => {
   const source =
-    `function f(input: unknown): object { return { ...(input as { a: number }), ...{ b: 2 } }; }`;
+    `function f(input: unknown, other: { b: number }): object { return { ...(input as { a: number }), ...other }; }`;
   assertEquals([
     ruleCount("record-forms", source),
     ruleCount("no-unsafe-cast", source),
@@ -294,7 +301,7 @@ Deno.test("record-forms: an all-spread merge keeps the cast diagnostic", () => {
 
 Deno.test("record-forms: an all-spread merge keeps the any-annotation diagnostic", () => {
   const source =
-    `function f(input: any): object { return { ...input, ...{ b: 2 } }; }`;
+    `function f(input: any, other: { b: number }): object { return { ...input, ...other }; }`;
   assertEquals([
     ruleCount("record-forms", source),
     ruleCount("no-unsafe-cast", source),
@@ -303,7 +310,7 @@ Deno.test("record-forms: an all-spread merge keeps the any-annotation diagnostic
 
 Deno.test("record-forms: an all-spread merge keeps the ambient diagnostic", () => {
   const source =
-    `function f(): object { return { ...Deno.args, ...{ b: 2 } }; }`;
+    `function f(other: { b: number }): object { return { ...Deno.args, ...other }; }`;
   assertEquals([
     ruleCount("record-forms", source),
     ruleCount("no-ambient-effects", source),
@@ -313,7 +320,7 @@ Deno.test("record-forms: an all-spread merge keeps the ambient diagnostic", () =
 Deno.test("record-forms: an all-spread merge keeps the discarded-result diagnostic", () => {
   const source = `type Result = { readonly ok: boolean };
 function result(): Result { return { ok: true }; }
-function f(): object { result(); return { ...{ a: 1 }, ...{ b: 2 } }; }`;
+function f(a: { a: number }, b: { b: number }): object { result(); return { ...a, ...b }; }`;
   assertEquals([
     ruleCount("record-forms", source),
     ruleCount("no-discarded-values", source),

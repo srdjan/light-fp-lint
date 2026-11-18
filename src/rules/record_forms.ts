@@ -70,9 +70,11 @@ export const recordForms: Deno.lint.Rule = {
         if (parent.properties[0] === node) return;
         // A literal made only of spreads is an ordered merge: later spreads
         // win by definition, with no explicit field to overwrite silently.
+        // An object-literal operand is an explicit field in disguise.
         if (
           parent.properties.every((property) =>
-            property.type === "SpreadElement"
+            property.type === "SpreadElement" &&
+            property.argument.type !== "ObjectExpression"
           )
         ) {
           return;

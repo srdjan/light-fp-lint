@@ -527,7 +527,8 @@ leading spread. An object literal made only of spreads is an ordered merge. Each
 operand is evaluated, and its properties are read in source order. This includes
 getters and Proxy traps. A later overlapping field overwrites an earlier one by
 definition. The allowance covers syntax only. It does not guarantee purity or
-disjoint fields.
+disjoint fields. An object-literal operand, such as `{ ...{ x: 1 }, ...base }`,
+counts as an explicit field. The rule treats that literal as a mixed literal.
 
 | Refused form                                                          | Write instead                                            | ZTS code |
 | --------------------------------------------------------------------- | -------------------------------------------------------- | -------- |
