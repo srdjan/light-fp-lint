@@ -1,4 +1,11 @@
 # Demo artifacts and recordings stay local.
 /demos/
 .playwright-mcp
+hubs/
+run/
+cache/
+logs/
+drafts/
+sessions/
+worktrees/
 .DS_Store
