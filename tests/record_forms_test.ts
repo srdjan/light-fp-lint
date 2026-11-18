@@ -1,5 +1,14 @@
 import { assertEquals, assertStringIncludes } from "@std/assert";
-import { ADAPTER, check, diagnose, DOMAIN, fires, silent } from "./harness.ts";
+import {
+  ADAPTER,
+  check,
+  checkCompiler,
+  diagnose,
+  DOMAIN,
+  fires,
+  ruleCount,
+  silent,
+} from "./harness.ts";
 
 check("record-forms", [
   // Shorthand.
@@ -264,11 +273,6 @@ Deno.test("record-forms: Object.assign names the member", () => {
   ]);
 });
 
-const ruleCount = (rule: string, source: string): number =>
-  diagnose(source, DOMAIN).filter((diagnostic) =>
-    diagnostic.id === `light-fp/${rule}`
-  ).length;
-
 Deno.test("record-forms: an all-spread merge does not silence pure-module", () => {
   const source = `function source(): { a: number } { return { a: 1 }; }
 function other(): { b: number } { return { b: 2 }; }
@@ -340,27 +344,6 @@ Deno.test("record-forms: an all-spread merge evaluates operands and getters in o
   assertEquals(merged.x, "right");
   assertEquals(events, ["left.operand", "left.x", "right.operand", "right.x"]);
 });
-
-const checkCompiler = async (
-  source: string,
-): Promise<{ ok: boolean; stderr: string }> => {
-  const directory = await Deno.makeTempDir({ prefix: "light-fp-record-" });
-  const path = `${directory}/fixture.ts`;
-  try {
-    await Deno.writeTextFile(path, source);
-    const output = await new Deno.Command(Deno.execPath(), {
-      args: ["check", "--cached-only", "--no-config", "--no-lock", path],
-      stdout: "null",
-      stderr: "piped",
-    }).output();
-    return {
-      ok: output.success,
-      stderr: new TextDecoder().decode(output.stderr),
-    };
-  } finally {
-    await Deno.remove(directory, { recursive: true });
-  }
-};
 
 Deno.test("record-forms: an ordered merge compiles with the later field winning", async () => {
   const source = `type L = { kind: "a" };

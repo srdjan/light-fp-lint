@@ -1,5 +1,13 @@
 import { assertEquals } from "@std/assert";
-import { ADAPTER, check, diagnose, DOMAIN, fires, silent } from "./harness.ts";
+import {
+  ADAPTER,
+  check,
+  diagnose,
+  DOMAIN,
+  fires,
+  ruleCount,
+  silent,
+} from "./harness.ts";
 
 check("operator-forms", [
   // Loose equality.
@@ -492,11 +500,6 @@ Deno.test("operator-forms: an increment gets the update message", () => {
     "`++` and `--` change a binding inside an expression.",
   ]);
 });
-
-const ruleCount = (rule: string, source: string): number =>
-  diagnose(source, DOMAIN).filter((diagnostic) =>
-    diagnostic.id === `light-fp/${rule}`
-  ).length;
 
 Deno.test("operator-forms: independent safeguards remain active", () => {
   const ambient =

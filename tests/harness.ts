@@ -69,3 +69,31 @@ export const fires = (rule: string, count = 1): readonly string[] =>
   Array(count).fill(rule);
 
 export const silent: readonly string[] = [];
+
+/** How many diagnostics from one rule a domain file with `source` produces. */
+export const ruleCount = (rule: string, source: string): number =>
+  diagnose(source, DOMAIN).filter((diagnostic) =>
+    diagnostic.id === `light-fp/${rule}`
+  ).length;
+
+/** The result of type-checking `source` with `deno check`, without the project config. */
+export const checkCompiler = async (
+  source: string,
+): Promise<{ readonly ok: boolean; readonly stderr: string }> => {
+  const directory = await Deno.makeTempDir({ prefix: "light-fp-check-" });
+  const path = `${directory}/fixture.ts`;
+  try {
+    await Deno.writeTextFile(path, source);
+    const output = await new Deno.Command(Deno.execPath(), {
+      args: ["check", "--cached-only", "--no-config", "--no-lock", path],
+      stdout: "null",
+      stderr: "piped",
+    }).output();
+    return {
+      ok: output.success,
+      stderr: new TextDecoder().decode(output.stderr),
+    };
+  } finally {
+    await Deno.remove(directory, { recursive: true });
+  }
+};

@@ -1,5 +1,14 @@
 import { assertEquals, assertThrows } from "@std/assert";
-import { ADAPTER, check, diagnose, DOMAIN, fires, silent } from "./harness.ts";
+import {
+  ADAPTER,
+  check,
+  checkCompiler,
+  diagnose,
+  DOMAIN,
+  fires,
+  ruleCount,
+  silent,
+} from "./harness.ts";
 
 check("declaration-forms", [
   {
@@ -433,11 +442,6 @@ Deno.test("declaration-forms: a local function expression names the helper", () 
   ]);
 });
 
-const ruleCount = (rule: string, source: string): number =>
-  diagnose(source, DOMAIN).filter((diagnostic) =>
-    diagnostic.id === `light-fp/${rule}`
-  ).length;
-
 Deno.test("declaration-forms: live-iteration safeguards remain active", () => {
   const source = `type Pair = readonly [number, number];
 function change(pairs: Pair[]): undefined {
@@ -618,29 +622,13 @@ Deno.test("declaration-forms: shorthand reads members once, in order, from one R
   assertEquals(evaluations, 1);
 });
 
-const checkCompiler = async (source: string): Promise<boolean> => {
-  const directory = await Deno.makeTempDir({ prefix: "light-fp-object-" });
-  const path = `${directory}/fixture.ts`;
-  try {
-    await Deno.writeTextFile(path, source);
-    const output = await new Deno.Command(Deno.execPath(), {
-      args: ["check", "--cached-only", "--no-config", "--no-lock", path],
-      stdout: "null",
-      stderr: "piped",
-    }).output();
-    return output.success;
-  } finally {
-    await Deno.remove(directory, { recursive: true });
-  }
-};
-
 Deno.test("declaration-forms: object binding compiles for valid records", async () => {
   const source = `type Pair = { readonly a: number; readonly b: number };
 function sum(pair: Pair): number {
   const { a, b } = pair;
   return a + b;
 }`;
-  assertEquals(await checkCompiler(source), true);
+  assertEquals((await checkCompiler(source)).ok, true);
 });
 
 Deno.test("declaration-forms: a string length shorthand compiles", async () => {
@@ -648,7 +636,7 @@ Deno.test("declaration-forms: a string length shorthand compiles", async () => {
   const { length } = text;
   return length;
 }`;
-  assertEquals(await checkCompiler(source), true);
+  assertEquals((await checkCompiler(source)).ok, true);
 });
 
 Deno.test("declaration-forms: object binding rejects unknown, null, and a missing field", async () => {
@@ -658,15 +646,15 @@ Deno.test("declaration-forms: object binding rejects unknown, null, and a missin
     `function first(input: null): number { const { a } = input; return a; }`;
   const missingSource = `type Pair = { readonly a: number };
 function first(pair: Pair): number { const { b } = pair; return b; }`;
-  assertEquals(await checkCompiler(unknownSource), false);
-  assertEquals(await checkCompiler(nullSource), false);
-  assertEquals(await checkCompiler(missingSource), false);
+  assertEquals((await checkCompiler(unknownSource)).ok, false);
+  assertEquals((await checkCompiler(nullSource)).ok, false);
+  assertEquals((await checkCompiler(missingSource)).ok, false);
 });
 
 Deno.test("declaration-forms: object binding rejects an optional field read as required", async () => {
   const source = `type Pair = { readonly a?: number };
 function first(pair: Pair): number { const { a } = pair; return a; }`;
-  assertEquals(await checkCompiler(source), false);
+  assertEquals((await checkCompiler(source)).ok, false);
 });
 
 Deno.test("declaration-forms: valid scopes and refused shapes all compile", async () => {
@@ -725,7 +713,7 @@ function first(pair: Pair, key: "a"): number { const { [key]: a } = pair; return
     ],
   ];
   for (const [name, source] of cases) {
-    assertEquals(await checkCompiler(source), true, name);
+    assertEquals((await checkCompiler(source)).ok, true, name);
   }
 });
 
