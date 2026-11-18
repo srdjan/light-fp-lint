@@ -18,12 +18,11 @@ const memberName = (node: Deno.lint.MemberExpression): string | undefined => {
 /**
  * `light-fp/record-forms`: domain code builds each record literal from explicit
  * `key: value` fields and at most one leading spread. An object literal made
- * only of spreads is an ordered merge, not a disjointness guarantee: each
- * operand is evaluated and its properties, including getters and Proxy traps,
- * are read in source order, and a later overlapping field overwrites an earlier
- * one by definition. Each refused form hides a field name, mutates a record in
- * place, or mixes an explicit field with a late spread so the field order
- * decides the result.
+ * only of spreads is an ordered merge. The merge reads each operand and its
+ * properties in source order, and a later overlapping field wins. It does not
+ * guarantee disjoint fields. Each refused form hides a field name, mutates a
+ * record in place, or mixes an explicit field with a late spread, so the field
+ * order decides the result.
  */
 export const recordForms: Deno.lint.Rule = {
   create(context) {

@@ -81,11 +81,11 @@ const isFlatConstObjectBinding = (
 /**
  * `light-fp/declaration-forms`: domain code binds each name on its own. A flat
  * positional or flat shorthand object binding inside a function may bind
- * immutable names, and a flat positional parameter reads its argument in place,
- * retaining the source iteration without claiming any rewrite equivalence. An
- * arrow assigned to a `const` is an immutable function value. Other
- * destructuring, a function expression, and a function assigned to a mutable
- * binding are refused.
+ * immutable names. A flat positional parameter reads its argument in place, so
+ * the source iteration stays. This claims no rewrite equivalence. An arrow
+ * assigned to a `const` is an immutable function value. Other destructuring, a
+ * function expression, and a function assigned to a mutable binding are
+ * refused.
  */
 export const declarationForms: Deno.lint.Rule = {
   create(context) {

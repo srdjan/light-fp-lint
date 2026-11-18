@@ -410,10 +410,10 @@ remain refused. This allowance preserves the source iterator's `next` and
 A nonempty flat positional parameter is allowed when every element is a plain
 identifier, such as `function f([a, b]: readonly [number, number])`. Holes,
 rest, defaults, nested patterns, empty patterns, default-wrapped parameters, and
-object parameters remain refused. This keeps the source destructuring, so the
-argument's iterator protocol and ordered reads run exactly as written; it is a
-syntax allowance, not purity, native-iterator, ownership, or rewrite-equivalence
-validation.
+object parameters remain refused. This keeps the source destructuring. The
+argument's iterator protocol and ordered reads run exactly as written. The
+allowance covers syntax only. It does not validate purity, native iterators,
+ownership, or rewrite equivalence.
 
 Inside an actual function body, a nonempty `const` object pattern is also
 allowed when every property is a plain shorthand identifier,
@@ -523,10 +523,11 @@ assignment or a sequence in a `for` header belongs to `statement-forms`.
 ### `light-fp/record-forms`
 
 Domain code builds each record from explicit `key: value` fields and at most one
-leading spread. An object literal made only of spreads is an ordered merge: each
-operand is evaluated and its properties, including getters and Proxy traps, are
-read in source order, and a later overlapping field overwrites an earlier one by
-definition. This is a syntax allowance, not a purity or disjointness guarantee.
+leading spread. An object literal made only of spreads is an ordered merge. Each
+operand is evaluated, and its properties are read in source order. This includes
+getters and Proxy traps. A later overlapping field overwrites an earlier one by
+definition. The allowance covers syntax only. It does not guarantee purity or
+disjoint fields.
 
 | Refused form                                                          | Write instead                                            | ZTS code |
 | --------------------------------------------------------------------- | -------------------------------------------------------- | -------- |
@@ -539,9 +540,9 @@ definition. This is a syntax allowance, not a purity or disjointness guarantee.
 
 A getter and a setter belong to `no-oo`. A shorthand property or a spread in an
 object pattern belongs to `declaration-forms`. An array spread stays allowed.
-The "write instead" for a mixed literal is a suggestion, not a
-source-equivalence proof: reordering changes which field wins, so a
-mixed-literal finding needs its own semantic justification before reordering.
+The "write instead" for a mixed literal is a suggestion, not a proof of
+equivalence. Reordering changes which field wins. A mixed-literal finding needs
+its own semantic justification before you reorder.
 
 ### `light-fp/type-forms`
 
