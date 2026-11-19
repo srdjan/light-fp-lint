@@ -235,9 +235,9 @@ if (!valid) return err({ _tag: "Invalid", reason: reason }); // fine
 ### `light-fp/no-discarded-values`
 
 Every expression statement inside a function must be a state transition such as
-an assignment, update, or generator `yield`, or a direct call to a nested helper
-whose return contract is proven unit: exactly `undefined`, or an explicit `void`
-whose own body never returns a value. Values produced by other calls,
+an assignment, update, or generator `yield`, or a direct call to a same-file
+helper whose return contract is proven unit: exactly `undefined`, or an explicit
+`void` whose own body never returns a value. Values produced by other calls,
 construction, logical and conditional expressions, optional chains, sequences,
 and tagged templates cannot be silently discarded. This is the
 unhandled-`Result` check. Asking "is this a `Result`?" needs type information
@@ -252,11 +252,13 @@ const checked = validateUser(input); // fine
 ```
 
 Assignments, updates, generator `yield`, directive prologues, and a required
-`super()` call are transitions and are not reported. The nested-helper allowance
-is deliberately narrow: the helper is a concrete synchronous function inside an
-actual function body; apart from its declaration identifier, every same-named
-occurrence is one of its direct calls. An explicit `void` qualifies only when
-the helper's own body contains no valued `return`, so a forwarded `Result` or
+`super()` call are transitions and are not reported. The unit-helper allowance
+is deliberately narrow: the helper is a concrete synchronous function declared
+directly in an actual function body or at module level (also through `export`);
+apart from its declaration identifier, every same-named occurrence in the file
+is one of its direct calls, so a helper that escapes as a value or through an
+export specifier stays reported. An explicit `void` qualifies only when the
+helper's own body contains no valued `return`, so a forwarded `Result` or
 `Promise` through `void` stays reported. `eval` or `with` disables the allowance
 for the file. Aliases of `undefined`, async functions, wrappers, member calls,
 and native mutation such as `values.push(x)` remain reported. A unit return

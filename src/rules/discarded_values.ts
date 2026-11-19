@@ -12,7 +12,7 @@ const FUNCTION_SCOPES = new Set([
 
 type UnitDeclaration = Readonly<{
   declaration: Deno.lint.FunctionDeclaration;
-  owner: Deno.lint.BlockStatement;
+  owner: Deno.lint.BlockStatement | Deno.lint.Program;
 }>;
 
 const occurrenceName = (node: SyntaxNode): string | undefined => {
@@ -41,6 +41,22 @@ const functionBodyOwner = (
     return undefined;
   }
   return owner.body === block ? block : undefined;
+};
+
+// A helper declared at module level, directly or through `export`, is
+// visible in the whole file, so the whole program owns its calls.
+const moduleOwner = (
+  node: Deno.lint.FunctionDeclaration,
+): Deno.lint.Program | undefined => {
+  const parent = node.parent;
+  if (parent.type === "Program") return parent;
+  if (
+    parent.type === "ExportNamedDeclaration" &&
+    parent.parent.type === "Program"
+  ) {
+    return parent.parent;
+  }
+  return undefined;
 };
 
 // A `: void` helper is proven unit only when its own body never returns a
@@ -80,13 +96,13 @@ const unitDeclaration = (
   } else if (returnType !== "TSUndefinedKeyword") {
     return undefined;
   }
-  const owner = functionBodyOwner(node, sourceCode);
+  const owner = functionBodyOwner(node, sourceCode) ?? moduleOwner(node);
   return owner === undefined ? undefined : { declaration: node, owner };
 };
 
 const directUnitCall = (
   occurrence: SyntaxNode,
-  owner: Deno.lint.BlockStatement,
+  owner: Deno.lint.BlockStatement | Deno.lint.Program,
   sourceCode: Deno.lint.SourceCode,
 ): Deno.lint.CallExpression | undefined => {
   if (occurrence.type !== "Identifier") return undefined;

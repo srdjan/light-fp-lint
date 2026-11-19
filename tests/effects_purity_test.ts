@@ -313,6 +313,21 @@ Deno.test("no-discarded-values: a body-proven void helper has no result to disca
   }
 });
 
+Deno.test("no-discarded-values: a module-level unit helper has no result to discard", () => {
+  for (
+    const source of [
+      `function unit(): undefined { return undefined; }
+function outer(): undefined { unit(); return undefined; }`,
+      `export function unit(): void { return; }
+export function outer(): undefined { unit(); return undefined; }`,
+      `function outer(): undefined { unit(); return undefined; }
+function unit(): void { }`,
+    ]
+  ) {
+    assertRuleCount("light-fp/no-discarded-values", source, 0);
+  }
+});
+
 Deno.test("no-discarded-values: a valued return inside a nested callable is not the void helper's own", () => {
   assertRuleCount(
     "light-fp/no-discarded-values",
@@ -349,8 +364,23 @@ function outer(input: Borrowed): undefined {
 for (
   const testCase of [
     {
-      name: "a module-level undefined helper",
+      name: "a module-level helper that escapes as a value",
       source: `function unit(): undefined { return undefined; }
+export const alias = unit;
+function outer(): undefined { unit(); return undefined; }`,
+      expected: 1,
+    },
+    {
+      name: "a module-level helper exported by a specifier",
+      source: `function unit(): undefined { return undefined; }
+export { unit };
+function outer(): undefined { unit(); return undefined; }`,
+      expected: 1,
+    },
+    {
+      name: "a module-level void helper forwarding a value",
+      source: `function produce(): void { return; }
+function unit(): void { return produce(); }
 function outer(): undefined { unit(); return undefined; }`,
       expected: 1,
     },
