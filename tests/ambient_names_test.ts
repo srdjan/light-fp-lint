@@ -382,6 +382,48 @@ check("ambient-names", [
     source: `export namespace Symbol { export const x = 1; }`,
     expect: silent,
   },
+  {
+    name: "a parameter name after a hole in an array pattern",
+    source:
+      `export const second = ([, value]: readonly [string, number]): number => value;`,
+    expect: silent,
+  },
+  {
+    name: "variable names after a hole in an array pattern",
+    source:
+      `export function f(pair: readonly [string, number, number]): number { const [, a, b] = pair; return a + b; }`,
+    expect: silent,
+  },
+  {
+    name: "names after a middle hole, a nested hole, and a default",
+    source:
+      `export function f(p: readonly [number, number, number, readonly [number, number]]): number { const [a, , b] = [p[0], p[1], p[2]]; const [j = 1, , k] = [p[0], p[1], p[2]]; const [, [, h]] = [p[0], p[3]]; return a + b + j + k + h; }`,
+    expect: silent,
+  },
+  {
+    name: "an object pattern after a hole is not read, so its name still fires",
+    source:
+      `export function f(p: readonly [number, { readonly x: number }]): number { const [, { x }] = p; return x; }`,
+    expect: fires("ambient-names"),
+  },
+  {
+    name: "a global read beside a hole pattern still fires",
+    source:
+      `export const f = ([, value]: readonly [string, number]): unknown => [value, console];`,
+    expect: fires("ambient-names"),
+  },
+  {
+    name: "an import attribute key",
+    source:
+      `import data from "./data.json" with { type: "json" };\nexport const a = data;`,
+    expect: silent,
+  },
+  {
+    name: "a rest parameter in a method signature",
+    source:
+      `export type T = { f(first: string, ...rest: readonly string[]): number };`,
+    expect: silent,
+  },
   // JSON.parse.
   {
     name: "JSON.parse reports once",

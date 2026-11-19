@@ -39,7 +39,10 @@ const isValueReference = (node: Deno.lint.Identifier): boolean => {
     case "ImportSpecifier":
     case "ImportDefaultSpecifier":
     case "ImportNamespaceSpecifier":
+    case "ImportAttribute":
       return false;
+    case "RestElement":
+      return !parent.parent.type.startsWith("TS");
     case "ExportSpecifier": {
       const declaration = parent.parent;
       return parent.local === node &&
@@ -75,7 +78,7 @@ export const ambientNames: Deno.lint.Rule = {
   create(context) {
     if (!isDomain(context.filename, context.sourceCode)) return {};
 
-    const local = localBindings(context.sourceCode.ast);
+    const local = localBindings(context.sourceCode);
 
     return {
       Identifier(node) {

@@ -53,24 +53,104 @@ export const memberName = (
     : undefined;
 };
 
+const isPlainName = (text: string): boolean =>
+  text.length > 0 &&
+  [...text].every((char, index) =>
+    (char >= "a" && char <= "z") || (char >= "A" && char <= "Z") ||
+    char === "_" || char === "$" || (index > 0 && char >= "0" && char <= "9")
+  );
+
+const OPENERS = "[{(";
+const CLOSERS = "]})";
+
+/** The comma-separated slots of a list's inner text, split at depth zero. */
+const topLevelSlots = (inner: string): readonly string[] => {
+  const slots: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let index = 0; index < inner.length; index++) {
+    const char = inner.charAt(index);
+    if (OPENERS.includes(char)) depth++;
+    if (CLOSERS.includes(char)) depth--;
+    if (char === "," && depth === 0) {
+      slots.push(inner.slice(start, index));
+      start = index + 1;
+    }
+  }
+  slots.push(inner.slice(start));
+  return slots;
+};
+
+/**
+ * The text between a leading `[` and the bracket that closes it. A type
+ * annotation or a default value after the pattern is not part of it.
+ */
+const bracketInner = (text: string): string | undefined => {
+  if (!text.startsWith("[")) return undefined;
+  let depth = 0;
+  for (let index = 0; index < text.length; index++) {
+    const char = text.charAt(index);
+    if (OPENERS.includes(char)) depth++;
+    if (CLOSERS.includes(char)) depth--;
+    if (depth === 0) return text.slice(1, index);
+  }
+  return undefined;
+};
+
+/**
+ * The names one array-pattern slot declares, read from its source text: a
+ * plain name, a rest name, a name with a default, or a nested array pattern.
+ * An object pattern or any other shape yields no name, so a misread slot can
+ * only add a report, never hide one.
+ */
+const slotNames = (slot: string): readonly string[] => {
+  const text = slot.trim();
+  if (text.startsWith("...")) return slotNames(text.slice(3));
+  const nested = bracketInner(text);
+  if (nested !== undefined) return topLevelSlots(nested).flatMap(slotNames);
+  const equals = text.indexOf("=");
+  const name = equals === -1 ? text : text.slice(0, equals).trim();
+  return isPlainName(name) ? [name] : [];
+};
+
 /**
  * The names that a binding pattern declares. A default value, a property key,
  * and a type annotation declare no name.
+ *
+ * Deno 2.9.8 drops every array-pattern element from the first hole on:
+ * `[a, , b]` arrives as `[a]` and `[, b]` as `[]`. When `textOf` is given,
+ * the names in the dropped slots are read from the pattern's source text.
  */
-export const patternNames = (node: SyntaxNode | null): readonly string[] => {
+export const patternNames = (
+  node: SyntaxNode | null,
+  textOf?: (pattern: Deno.lint.ArrayPattern) => string,
+): readonly string[] => {
   if (!node) return [];
   if (node.type === "Identifier") return [node.name];
-  if (node.type === "AssignmentPattern") return patternNames(node.left);
-  if (node.type === "RestElement") return patternNames(node.argument);
+  if (node.type === "AssignmentPattern") return patternNames(node.left, textOf);
+  if (node.type === "RestElement") return patternNames(node.argument, textOf);
   if (node.type === "ArrayPattern") {
-    return node.elements.flatMap((element) => patternNames(element));
+    const kept = node.elements.flatMap((element) =>
+      patternNames(element, textOf)
+    );
+    const inner = textOf === undefined
+      ? undefined
+      : bracketInner(textOf(node).trim());
+    if (inner === undefined) return kept;
+    const dropped = topLevelSlots(inner).slice(node.elements.length);
+    return [...kept, ...dropped.flatMap(slotNames)];
   }
   if (node.type === "ObjectPattern") {
     return node.properties.flatMap((property) =>
-      patternNames(property.type === "Property" ? property.value : property)
+      patternNames(
+        property.type === "Property" ? property.value : property,
+        textOf,
+      )
     );
   }
-  if (node.type === "TSParameterProperty") return patternNames(node.parameter);
+  if (node.type === "TSParameterProperty") {
+    return patternNames(node.parameter, textOf);
+  }
   return [];
 };
 
@@ -94,12 +174,16 @@ export const isFlatShorthandObjectPattern = (
  * class names, parameters, catch parameters, and enum, namespace, and import
  * alias names. A global name that appears here is shadowed, not ambient.
  */
-export const localBindings = (ast: Deno.lint.Program): ReadonlySet<string> => {
+export const localBindings = (
+  sourceCode: Deno.lint.SourceCode,
+): ReadonlySet<string> => {
   const names = new Set<string>();
   const visited = new Set<SyntaxNode>();
+  const textOf = (pattern: Deno.lint.ArrayPattern): string =>
+    sourceCode.getText(pattern);
 
   const addPattern = (node: SyntaxNode | null): void => {
-    for (const name of patternNames(node)) names.add(name);
+    for (const name of patternNames(node, textOf)) names.add(name);
   };
 
   const visit = (value: unknown): void => {
@@ -147,6 +231,6 @@ export const localBindings = (ast: Deno.lint.Program): ReadonlySet<string> => {
     }
   };
 
-  visit(ast);
+  visit(sourceCode.ast);
   return names;
 };

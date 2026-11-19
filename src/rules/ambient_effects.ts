@@ -79,7 +79,7 @@ export const noAmbientEffects: Deno.lint.Rule = {
   create(context) {
     if (layerOf(context.filename, context.sourceCode) === "adapter") return {};
 
-    const local = localBindings(context.sourceCode.ast);
+    const local = localBindings(context.sourceCode);
 
     const report = (node: Deno.lint.Node, what: string, capability: string) => {
       context.report({

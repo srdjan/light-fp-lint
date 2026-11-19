@@ -19,7 +19,7 @@ export const recordForms: Deno.lint.Rule = {
   create(context) {
     if (!isDomain(context.filename, context.sourceCode)) return {};
 
-    const local = localBindings(context.sourceCode.ast);
+    const local = localBindings(context.sourceCode);
 
     return {
       Property(node) {
