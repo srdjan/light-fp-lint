@@ -231,3 +231,115 @@ Deno.test("readonly-data: the redundant wrapper respects the layer and callable 
     "ambient declarations are skipped",
   );
 });
+
+const mutableCollectionReports = (
+  source: string,
+  filename = DOMAIN,
+): readonly Deno.lint.Diagnostic[] =>
+  diagnosticsFor("readonly-data", source, filename)
+    .filter((diagnostic) => diagnostic.message.includes("is mutable"));
+
+Deno.test("readonly-data: a module-local object alias named Map is not the built-in", () => {
+  const source = `export type Map = {
+    readonly kind: "map";
+    readonly key: string;
+    readonly value: string;
+  };
+export type Expression = string | Map;`;
+  assertEquals(mutableCollectionReports(source).length, 0);
+});
+
+Deno.test("readonly-data: the built-in Map in a direct union stays reported", () => {
+  assertEquals(
+    mutableCollectionReports(
+      `export type SnapshotMap = Map<string, number> | null;`,
+    ).length,
+    1,
+  );
+});
+
+Deno.test("readonly-data: a built-in Map alias stays reported", () => {
+  assertEquals(
+    mutableCollectionReports(
+      `type SnapshotMap = Map<string, { ok: boolean }>;`,
+    ).length,
+    1,
+  );
+});
+
+Deno.test("readonly-data: a self-referential Map alias is not proof of the built-in", () => {
+  assertEquals(
+    mutableCollectionReports(`export type Map = Map<string, unknown>;`).length,
+    1,
+  );
+});
+
+Deno.test("readonly-data: an import-equals-only script has no module boundary", () => {
+  const source = `import Map = Foo.Map;
+type Expression = string | Map;`;
+  assertEquals(mutableCollectionReports(source).length, 1);
+});
+
+Deno.test("readonly-data: a same-name import-equals collides with the alias", () => {
+  const source = `export type Map = {
+    readonly kind: "map";
+    readonly key: string;
+    readonly value: string;
+  };
+export import Map = Foo.Map;
+export type Expression = string | Map;`;
+  assertEquals(mutableCollectionReports(source).length, 1);
+});
+
+Deno.test("readonly-data: a nested-only Map alias does not suppress a module-level use", () => {
+  const source = `function f() {
+  type Map = { readonly kind: "map" };
+}
+export type Expression = string | Map;`;
+  assertEquals(mutableCollectionReports(source).length, 1);
+});
+
+Deno.test("readonly-data: a value-only const Map does not suppress a type use", () => {
+  const source = `const Map = { kind: "map" };
+export type Expression = string | Map;`;
+  assertEquals(mutableCollectionReports(source).length, 1);
+});
+
+Deno.test("readonly-data: duplicate root Map aliases stay reported", () => {
+  const source = `type Map = { readonly kind: "map" };
+type Map = { readonly other: number; };
+export type Expression = string | Map;`;
+  assertEquals(mutableCollectionReports(source).length, 1);
+});
+
+Deno.test("readonly-data: declaration order does not change the alias proof", () => {
+  const before = `export type Map = {
+    readonly kind: "map";
+    readonly key: string;
+    readonly value: string;
+  };
+export type Expression = string | Map;`;
+  const after = `export type Expression = string | Map;
+export type Map = {
+    readonly kind: "map";
+    readonly key: string;
+    readonly value: string;
+  };`;
+  assertEquals(mutableCollectionReports(before).length, 0);
+  assertEquals(mutableCollectionReports(after).length, 0);
+});
+
+Deno.test("readonly-data: mutable fields inside a local alias still report", () => {
+  const source = `export type Map = {
+    kind: string;
+    readonly key: string;
+  };
+export type Expression = string | Map;`;
+  assertEquals(mutableCollectionReports(source).length, 0);
+  assertEquals(
+    diagnosticsFor("readonly-data", source).filter((diagnostic) =>
+      diagnostic.message === "Data properties are readonly."
+    ).length,
+    1,
+  );
+});

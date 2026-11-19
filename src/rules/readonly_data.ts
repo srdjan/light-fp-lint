@@ -59,6 +59,92 @@ export const readonlyData: Deno.lint.Rule = {
 
     const frames: Frame[] = [];
 
+    // A reference to `Map` (or `Array`/`Set`) inside a data type normally
+    // names the global mutable collection. When the file instead declares its
+    // own module-scope `type Map = { ... }` object alias, a bare reference to
+    // that name is the alias, not the built-in. This is provable only for a
+    // direct union member of a top-level non-generic alias, in an external
+    // module; every other context keeps the name report.
+    const hasTypeParams = (alias: Deno.lint.TSTypeAliasDeclaration): boolean =>
+      alias.typeParameters != null;
+
+    const body = context.sourceCode.ast.body;
+
+    // An external module is required: without a top-level import or export, a
+    // bare declaration participates in the global scope and the module-local
+    // binding proof does not hold.
+    const moduleBoundary = body.some((statement) =>
+      statement.type === "ImportDeclaration" ||
+      statement.type === "ExportNamedDeclaration" ||
+      statement.type === "ExportDefaultDeclaration" ||
+      statement.type === "ExportAllDeclaration"
+    );
+
+    type BindingCounts = {
+      typeAlias: number;
+      interface: number;
+      class: number;
+      enum: number;
+      namespace: number;
+      imports: number;
+    };
+
+    const countsBy = new Map<string, BindingCounts>();
+    const aliasBy = new Map<string, Deno.lint.TSTypeAliasDeclaration>();
+
+    const countsFor = (name: string): BindingCounts => {
+      const existing = countsBy.get(name);
+      if (existing) return existing;
+      const fresh = {
+        typeAlias: 0,
+        interface: 0,
+        class: 0,
+        enum: 0,
+        namespace: 0,
+        imports: 0,
+      };
+      countsBy.set(name, fresh);
+      return fresh;
+    };
+
+    for (const statement of body) {
+      if (statement.type === "ImportDeclaration") {
+        for (const specifier of statement.specifiers) {
+          countsFor(specifier.local.name).imports += 1;
+        }
+        continue;
+      }
+      if (statement.type === "TSImportEqualsDeclaration") {
+        countsFor(statement.id.name).imports += 1;
+        continue;
+      }
+      const declaration = statement.type === "ExportNamedDeclaration" ||
+          statement.type === "ExportDefaultDeclaration"
+        ? statement.declaration
+        : statement;
+      if (declaration === null || declaration === undefined) continue;
+      switch (declaration.type) {
+        case "TSTypeAliasDeclaration":
+          countsFor(declaration.id.name).typeAlias += 1;
+          aliasBy.set(declaration.id.name, declaration);
+          break;
+        case "TSInterfaceDeclaration":
+          countsFor(declaration.id.name).interface += 1;
+          break;
+        case "ClassDeclaration":
+          if (declaration.id) countsFor(declaration.id.name).class += 1;
+          break;
+        case "TSEnumDeclaration":
+          if (declaration.id) countsFor(declaration.id.name).enum += 1;
+          break;
+        case "TSModuleDeclaration":
+          if (declaration.id.type === "Identifier") {
+            countsFor(declaration.id.name).namespace += 1;
+          }
+          break;
+      }
+    }
+
     const inAmbient = (): boolean => frames.some((frame) => frame.inAmbient);
 
     const inData = (): boolean =>
@@ -127,6 +213,52 @@ export const readonlyData: Deno.lint.Rule = {
       element.type === "TSArrayType" || LOOSE_TYPES.has(element.type)
         ? `(${readonlyArrayText(element)})`
         : context.sourceCode.getText(element);
+
+    // A mutable-collection name that is instead the file's own object alias:
+    // unique module-scope `type X = { ... }`, non-generic, zero type arguments,
+    // and the reference is a direct union member of another top-level
+    // non-generic alias. Only then does the name refer to the alias, not the
+    // built-in; everything else keeps the report.
+    const isLocalObjectAlias = (
+      name: string,
+      node: Deno.lint.TSTypeReference,
+    ): boolean => {
+      if (!moduleBoundary) return false;
+      const counts = countsBy.get(name);
+      if (!counts || counts.typeAlias !== 1) return false;
+      if (
+        counts.interface !== 0 || counts.class !== 0 || counts.enum !== 0 ||
+        counts.namespace !== 0 || counts.imports !== 0
+      ) return false;
+      const alias = aliasBy.get(name);
+      if (!alias || alias.typeAnnotation.type !== "TSTypeLiteral") return false;
+      if (hasTypeParams(alias)) return false;
+      if (
+        node.typeArguments !== undefined && node.typeArguments.params.length > 0
+      ) {
+        return false;
+      }
+      const ancestors = context.sourceCode.getAncestors(node);
+      const shape = ancestors.map((ancestor) => ancestor.type);
+      const exactShape = shape.length === 3
+        ? shape[0] === "Program" &&
+          shape[1] === "TSTypeAliasDeclaration" &&
+          shape[2] === "TSUnionType"
+        : shape.length === 4
+        ? shape[0] === "Program" &&
+          shape[1] === "ExportNamedDeclaration" &&
+          shape[2] === "TSTypeAliasDeclaration" &&
+          shape[3] === "TSUnionType"
+        : false;
+      if (!exactShape) return false;
+      const owner = ancestors.at(-2);
+      if (owner === undefined || owner.type !== "TSTypeAliasDeclaration") {
+        return false;
+      }
+      if (owner.typeAnnotation !== ancestors.at(-1)) return false;
+      if (hasTypeParams(owner)) return false;
+      return true;
+    };
 
     const visitors: Deno.lint.LintVisitor = {
       TSTypeAliasDeclaration() {
@@ -206,6 +338,7 @@ export const readonlyData: Deno.lint.Rule = {
         const replacement = MUTABLE_COLLECTIONS[node.typeName.name];
         if (!replacement) return;
         if (inAmbient() || !inData()) return;
+        if (isLocalObjectAlias(node.typeName.name, node)) return;
         const element = node.typeArguments?.params[0];
         context.report({
           node: node.typeName,
