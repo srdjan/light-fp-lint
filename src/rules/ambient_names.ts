@@ -1,6 +1,6 @@
 // @light-fp adapter -- a lint rule adapts Deno's visitor API: it reports through a
 // void callback and is driven by mutation it does not own.
-import { localBindings } from "../ast.ts";
+import { localBindings, memberName } from "../ast.ts";
 import { isDomain } from "../layer.ts";
 
 /** The only global names that domain code may read without a binding. */
@@ -20,16 +20,6 @@ const ALLOWED_NAMES: readonly string[] = [
   "Infinity",
   "Promise",
 ];
-
-const memberName = (node: Deno.lint.MemberExpression): string | undefined => {
-  if (!node.computed) {
-    return node.property.type === "Identifier" ? node.property.name : undefined;
-  }
-  return node.property.type === "Literal" &&
-      typeof node.property.value === "string"
-    ? node.property.value
-    : undefined;
-};
 
 /**
  * Whether the identifier reads or writes a value. Declared names are in the

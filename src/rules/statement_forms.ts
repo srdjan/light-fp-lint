@@ -4,6 +4,7 @@ import {
   childValuesOf,
   isFlatShorthandObjectPattern,
   isNode,
+  memberName,
   patternNames,
   type SyntaxNode,
 } from "../ast.ts";
@@ -183,16 +184,6 @@ const samePlace = (a: Place | undefined, b: Place): boolean =>
 /** Alias hops followed before the rule stops, so a cycle of names ends. */
 const MAX_ALIAS_HOPS = 8;
 
-const methodName = (node: Deno.lint.MemberExpression): string | undefined => {
-  if (!node.computed) {
-    return node.property.type === "Identifier" ? node.property.name : undefined;
-  }
-  return node.property.type === "Literal" &&
-      typeof node.property.value === "string"
-    ? node.property.value
-    : undefined;
-};
-
 const containsJump = (value: unknown): boolean => {
   if (Array.isArray(value)) return value.some(containsJump);
   if (!isNode(value)) return false;
@@ -354,7 +345,7 @@ export const statementForms: Deno.lint.Rule = {
       CallExpression(node) {
         const callee = node.callee;
         if (callee.type !== "MemberExpression") return;
-        const name = methodName(callee);
+        const name = memberName(callee);
         if (name === undefined || !MUTATING_METHODS.includes(name)) return;
         reportLive(node, callee.object);
       },

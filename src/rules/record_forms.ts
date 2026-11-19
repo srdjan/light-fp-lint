@@ -1,19 +1,9 @@
 // @light-fp adapter -- a lint rule adapts Deno's visitor API: it reports through a
 // void callback and is driven by mutation it does not own.
-import { localBindings } from "../ast.ts";
+import { localBindings, memberName } from "../ast.ts";
 import { isDomain } from "../layer.ts";
 
 const OBJECT_MEMBERS: readonly string[] = ["assign", "freeze", "isFrozen"];
-
-const memberName = (node: Deno.lint.MemberExpression): string | undefined => {
-  if (!node.computed) {
-    return node.property.type === "Identifier" ? node.property.name : undefined;
-  }
-  return node.property.type === "Literal" &&
-      typeof node.property.value === "string"
-    ? node.property.value
-    : undefined;
-};
 
 /**
  * `light-fp/record-forms`: domain code builds each record literal from explicit

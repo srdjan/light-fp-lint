@@ -37,6 +37,23 @@ export const isNode = (value: unknown): value is SyntaxNode =>
   typeof value.type === "string";
 
 /**
+ * The member a member expression names statically: the property of a
+ * non-computed `obj.name`, or a string-literal key of `obj["name"]`. A computed
+ * member with a non-literal key names nothing this can know without running it.
+ */
+export const memberName = (
+  node: Deno.lint.MemberExpression,
+): string | undefined => {
+  if (!node.computed) {
+    return node.property.type === "Identifier" ? node.property.name : undefined;
+  }
+  return node.property.type === "Literal" &&
+      typeof node.property.value === "string"
+    ? node.property.value
+    : undefined;
+};
+
+/**
  * The names that a binding pattern declares. A default value, a property key,
  * and a type annotation declare no name.
  */

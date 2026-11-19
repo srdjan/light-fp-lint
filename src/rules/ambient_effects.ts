@@ -1,6 +1,6 @@
 // @light-fp adapter -- a lint rule adapts Deno's visitor API: it reports through a
 // void callback and is driven by mutation it does not own.
-import { localBindings } from "../ast.ts";
+import { localBindings, memberName } from "../ast.ts";
 import { layerOf } from "../layer.ts";
 
 /** Ambient objects the domain must never reach. */
@@ -56,16 +56,6 @@ const AMBIENT_CONSTRUCTORS: Readonly<Record<string, string>> = {
 
 const nameOf = (node: Deno.lint.Node | null | undefined): string | undefined =>
   node && node.type === "Identifier" ? node.name : undefined;
-
-const propertyName = (node: Deno.lint.MemberExpression): string | undefined => {
-  if (!node.computed) {
-    return node.property.type === "Identifier" ? node.property.name : undefined;
-  }
-  return node.property.type === "Literal" &&
-      typeof node.property.value === "string"
-    ? node.property.value
-    : undefined;
-};
 
 const firstCapability = (
   capabilities: Readonly<Record<string, string>> | undefined,
@@ -139,7 +129,7 @@ export const noAmbientEffects: Deno.lint.Rule = {
 
         const members = AMBIENT_MEMBERS[object];
         if (!members) return;
-        const property = propertyName(node);
+        const property = memberName(node);
         if (!property) return;
         const capability = members[property];
         if (capability) report(node, `\`${object}.${property}()\``, capability);
