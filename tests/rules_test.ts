@@ -1,4 +1,5 @@
-import { ADAPTER, check, fires, silent } from "./harness.ts";
+import { assertEquals } from "@std/assert";
+import { ADAPTER, check, diagnose, DOMAIN, fires, silent } from "./harness.ts";
 
 // Cases marked B1-B7 are the coverage gaps the audit measured on the old rule
 // set. Each one is a regression test now.
@@ -512,3 +513,13 @@ check("require-ignore-reason", [
     expect: silent,
   },
 ]);
+
+Deno.test("no-unsafe-cast: the cast hint names only forms the other rules accept", () => {
+  const hints = diagnose(`export const n = (1 as unknown) as number;`, DOMAIN)
+    .filter((d) => d.id === "light-fp/no-unsafe-cast")
+    .map((d) => d.hint);
+  assertEquals(hints, [
+    "Annotate the declaration, narrow with a type guard, or move the cast into the smart constructor beside the type it creates.",
+    "Annotate the declaration, narrow with a type guard, or move the cast into the smart constructor beside the type it creates.",
+  ]);
+});
