@@ -43,6 +43,26 @@ const functionBodyOwner = (
   return owner.body === block ? block : undefined;
 };
 
+// A `: void` helper is proven unit only when its own body never returns a
+// value. Bare `return` and falling off the end both complete with `undefined`,
+// but `return expr`, `return undefined`, and an unreachable valued return can
+// carry a forwarded `Result` or `Promise` and must stay reported. Returns
+// inside a nested callable body belong to that callable, not this one.
+const bodyHasValuedReturn = (body: Deno.lint.BlockStatement): boolean => {
+  const visited = new Set<SyntaxNode>();
+  const visit = (value: unknown): boolean => {
+    if (Array.isArray(value)) return value.some(visit);
+    if (!isNode(value) || visited.has(value)) return false;
+    visited.add(value);
+    if (value.type === "ReturnStatement") {
+      if (value.argument !== null) return true;
+    }
+    if (FUNCTION_SCOPES.has(value.type)) return false;
+    return childValuesOf(value).some(visit);
+  };
+  return visit(body);
+};
+
 const unitDeclaration = (
   node: Deno.lint.FunctionDeclaration,
   sourceCode: Deno.lint.SourceCode,
@@ -54,7 +74,10 @@ const unitDeclaration = (
   ) {
     return undefined;
   }
-  if (node.returnType?.typeAnnotation.type !== "TSUndefinedKeyword") {
+  const returnType = node.returnType?.typeAnnotation.type;
+  if (returnType === "TSVoidKeyword") {
+    if (bodyHasValuedReturn(body)) return undefined;
+  } else if (returnType !== "TSUndefinedKeyword") {
     return undefined;
   }
   const owner = functionBodyOwner(node, sourceCode);

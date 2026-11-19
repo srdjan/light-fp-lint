@@ -236,9 +236,10 @@ if (!valid) return err({ _tag: "Invalid", reason: reason }); // fine
 
 Every expression statement inside a function must be a state transition such as
 an assignment, update, or generator `yield`, or a direct call to a nested helper
-whose declared return type is exactly `undefined`. Values produced by other
-calls, construction, logical and conditional expressions, optional chains,
-sequences, and tagged templates cannot be silently discarded. This is the
+whose return contract is proven unit: exactly `undefined`, or an explicit `void`
+whose own body never returns a value. Values produced by other calls,
+construction, logical and conditional expressions, optional chains, sequences,
+and tagged templates cannot be silently discarded. This is the
 unhandled-`Result` check. Asking "is this a `Result`?" needs type information
 the linter does not have; asking "is a value being thrown away?" does not. It
 catches ignored `Result` values, floating promises, and fire-and-forget effects
@@ -254,12 +255,13 @@ Assignments, updates, generator `yield`, directive prologues, and a required
 `super()` call are transitions and are not reported. The nested-helper allowance
 is deliberately narrow: the helper is a concrete synchronous function inside an
 actual function body; apart from its declaration identifier, every same-named
-occurrence is one of its direct calls. `eval` or `with` disables the allowance
-for the file. `void`, aliases of `undefined`, async functions, wrappers, member
-calls, and native mutation such as `values.push(x)` remain reported. An
-`undefined` return contract says only that no meaningful result was discarded;
-the helper can still mutate borrowed input, so the rule does not call it pure or
-locally owned.
+occurrence is one of its direct calls. An explicit `void` qualifies only when
+the helper's own body contains no valued `return`, so a forwarded `Result` or
+`Promise` through `void` stays reported. `eval` or `with` disables the allowance
+for the file. Aliases of `undefined`, async functions, wrappers, member calls,
+and native mutation such as `values.push(x)` remain reported. A unit return
+contract says only that no meaningful result was discarded; the helper can still
+mutate borrowed input, so the rule does not call it pure or locally owned.
 
 ### `light-fp/readonly-data`
 
@@ -777,7 +779,8 @@ These limits are measured against the current implementation:
   construction at module scope, and construction inside a function is allowed.
 - **`no-discarded-values` reports every non-transition expression statement in a
   function, except a proven nested unit call.** That call targets a concrete
-  nested function whose return annotation is exactly `undefined`; apart from the
+  nested function whose return contract is proven unit: exactly `undefined`, or
+  an explicit `void` whose own body never returns a value; apart from the
   declaration identifier, every same-named occurrence must be a direct call
   inside its owning function body. Assignments, updates, generator `yield`,
   directive prologues, and required `super()` calls are also allowed. Other

@@ -289,6 +289,47 @@ Deno.test("no-discarded-values: nested explicit-undefined helpers have no result
   }
 });
 
+Deno.test("no-discarded-values: a body-proven void helper has no result to discard", () => {
+  for (
+    const source of [
+      `function outer(): undefined {
+  function unit(): void { }
+  unit();
+  return undefined;
+}`,
+      `function outer(): undefined {
+  function unit(): void { return; }
+  unit();
+  return undefined;
+}`,
+      `function outer(): undefined {
+  unit();
+  function unit(): void { return; }
+  return undefined;
+}`,
+    ]
+  ) {
+    assertRuleCount("light-fp/no-discarded-values", source, 0);
+  }
+});
+
+Deno.test("no-discarded-values: a valued return inside a nested callable is not the void helper's own", () => {
+  assertRuleCount(
+    "light-fp/no-discarded-values",
+    `function outer(): undefined {
+  function unit(): void {
+    const xs = [1].flatMap((x) => {
+      return x > 0 ? "a" : "b";
+    });
+    return;
+  }
+  unit();
+  return undefined;
+}`,
+    0,
+  );
+});
+
 Deno.test("no-discarded-values: an undefined contract is not a purity or ownership claim", () => {
   assertRuleCount(
     "light-fp/no-discarded-values",
@@ -352,6 +393,58 @@ function outer(): undefined { unit(); return undefined; }`,
       name: "a void return",
       source: `function outer(): undefined {
   function unit(): void { return undefined; }
+  unit();
+  return undefined;
+}`,
+      expected: 1,
+    },
+    {
+      name: "a void helper forwarding a Result",
+      source: `type Err = { readonly _tag: "Err"; readonly error: string };
+function outer(): undefined {
+  const produce: () => void = () => ({ _tag: "Err", error: "lost" });
+  function unit(): void { return produce(); }
+  unit();
+  return undefined;
+}`,
+      expected: 1,
+    },
+    {
+      name: "a void helper forwarding a Promise",
+      source: `function outer(): undefined {
+  const produce: () => void = () => Promise.resolve({ _tag: "Err", error: "lost" });
+  function unit(): void { return produce(); }
+  unit();
+  return undefined;
+}`,
+      expected: 1,
+    },
+    {
+      name: "a void helper with an assertion to void",
+      source: `type Err = { readonly _tag: "Err"; readonly error: string };
+function outer(): undefined {
+  const err: Err = { _tag: "Err", error: "lost" };
+  function unit(): void { return err as unknown as void; }
+  unit();
+  return undefined;
+}`,
+      expected: 1,
+    },
+    {
+      name: "a void helper with a valued finally return",
+      source: `function outer(): undefined {
+  function produce(): void { return; }
+  function unit(): void { try { return; } finally { return produce(); } }
+  unit();
+  return undefined;
+}`,
+      expected: 1,
+    },
+    {
+      name: "a void helper with an unreachable valued return",
+      source: `function outer(): undefined {
+  function produce(): void { return; }
+  function unit(): void { return; return produce(); }
   unit();
   return undefined;
 }`,
